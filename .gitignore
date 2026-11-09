@@ -1,0 +1,25 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+.idea/
+.vscode/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock.bak
+
+# generated platform runners are created by tool/setup.sh and ARE committed;
+# only their local junk is ignored
+**/Pods/
+**/.gradle/
+**/local.properties
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/android/key.properties
+*.jks
+*.keystore
+.DS_Store
