@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../models/channel.dart';
+import '../models/gif.dart';
+import '../models/message.dart';
 import '../models/user.dart';
 import 'rpc_client.dart';
 
@@ -55,5 +57,150 @@ class GoThermoApi {
     final raw = await _rpc.call('GetChannels', [token]);
     if (raw is! List) return const [];
     return raw.whereType<Map<String, dynamic>>().map(Channel.fromJson).toList();
+  }
+
+  List<Map<String, dynamic>> _maps(Object? raw) =>
+      raw is List ? raw.whereType<Map<String, dynamic>>().toList() : const [];
+
+  /// Everyone on the server, with their status and picture.
+  Future<List<User>> users(String token) async {
+    final raw = await _rpc.call('GetUsers', [token]);
+    return _maps(raw).map(User.fromJson).toList();
+  }
+
+  Future<List<Channel>> dmChannels(String token, String username) async {
+    final raw = await _rpc.call('GetDMChannels', [token, username]);
+    return _maps(raw).map(Channel.fromJson).toList();
+  }
+
+  Future<Channel> getOrCreateDm(String token, String me, String other) async {
+    final raw = await _rpc.call('GetOrCreateDMChannel', [token, me, other]);
+    return Channel.fromJson(_map(raw));
+  }
+
+  Future<void> joinChannel(String token, String channel, String username) async {
+    await _rpc.call('JoinChannel', [token, channel, username]);
+  }
+
+  /// [beforeId] empty = the newest page, otherwise the page right before that message.
+  Future<List<Message>> messagesPage(
+    String token,
+    String channel, {
+    String beforeId = '',
+    int limit = 40,
+  }) async {
+    final raw = await _rpc.call('GetMessagesPage', [token, channel, beforeId, limit]);
+    return _maps(raw).map(Message.fromJson).toList();
+  }
+
+  /// Returns the id of the new message.
+  Future<String> sendMessage(String token, String user, String text, String channel) async {
+    final raw = await _rpc.call('SendMessage', [token, user, text, channel]);
+    return raw is String ? raw : '';
+  }
+
+  Future<void> toggleReaction(
+    String token,
+    String messageId,
+    String emoji,
+    String username,
+    String channel,
+  ) async {
+    await _rpc.call('AddReaction', [token, messageId, emoji, username, channel]);
+  }
+
+  Future<Message> editMessage(
+    String token,
+    String messageId,
+    String channel,
+    String username,
+    String newText,
+  ) async {
+    final raw = await _rpc.call('EditMessage', [token, messageId, channel, username, newText]);
+    return Message.fromJson(_map(raw));
+  }
+
+  Future<void> deleteMessage(String token, String messageId, String channel, String username) async {
+    await _rpc.call('DeleteMessage', [token, messageId, channel, username]);
+  }
+
+  Future<void> markRead(String token, String username, String channel) async {
+    await _rpc.call('MarkChannelRead', [token, username, channel]);
+  }
+
+  Future<Map<String, int>> unreadCounts(String token, String username) async {
+    final raw = await _rpc.call('GetUnreadCounts', [token, username]);
+    final out = <String, int>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (k is String && v is num) out[k] = v.toInt();
+      });
+    }
+    return out;
+  }
+
+  Future<List<Message>> search(String token, String username, String query) async {
+    final raw = await _rpc.call('SearchMessages', [token, username, query]);
+    return _maps(raw).map(Message.fromJson).toList();
+  }
+
+  /// [base64Data] is plain base64 (a `data:` prefix is accepted too).
+  Future<Message> sendFile(
+    String token,
+    String user,
+    String channel,
+    String fileName,
+    String mimeType,
+    String base64Data,
+  ) async {
+    final raw = await _rpc.call('SendFile', [token, user, channel, fileName, mimeType, base64Data]);
+    return Message.fromJson(_map(raw));
+  }
+
+  /// The file as a `data:<mime>;base64,...` URL.
+  Future<String> fileData(String token, String fileId) async {
+    final raw = await _rpc.call('GetFileData', [token, fileId]);
+    if (raw is! String || raw.isEmpty) throw RpcException('The file is empty');
+    return raw;
+  }
+
+  Future<bool> gifsEnabled(String token) async {
+    try {
+      return (await _rpc.call('GifsEnabled', [token])) == true;
+    } on RpcException {
+      return false;
+    }
+  }
+
+  Future<List<Gif>> searchGifs(String token, String query) async {
+    final raw = await _rpc.call('SearchGifs', [token, query]);
+    return _maps(raw).map(Gif.fromJson).where((g) => g.url.isNotEmpty).toList();
+  }
+
+  Future<void> setAvatar(String token, String user, String base64Data) async {
+    await _rpc.call('SetAvatar', [token, user, base64Data]);
+  }
+
+  Future<void> removeAvatar(String token, String user) async {
+    await _rpc.call('RemoveAvatar', [token, user]);
+  }
+
+  /// The OAuth client id the server trusts for the browser, or empty when Google
+  /// sign-in is not set up. The phone passes it to Google as `serverClientId`.
+  Future<String> googleWebClientId() async {
+    try {
+      final raw = await _rpc.call('GoogleWebClientID', []);
+      return raw is String ? raw : '';
+    } on RpcException {
+      return '';
+    }
+  }
+
+  /// The server checks the token belongs to its own Google client, reads the
+  /// profile from Google itself, and signs the person in. [signUp] false only
+  /// lets existing accounts in.
+  Future<Session> loginWithGoogleToken(String accessToken, {required bool signUp}) async {
+    final raw = await _rpc.call('LoginWithGoogleToken', [accessToken, signUp]);
+    return _sessionFrom(raw, User.fromJson(_map(raw)));
   }
 }

@@ -1,3 +1,5 @@
+import 'json.dart';
+
 class User {
   const User({
     required this.username,
@@ -15,14 +17,28 @@ class User {
   final String? avatar;
   final bool isAdmin;
 
-  factory User.fromJson(Map<String, dynamic> json) => User(
-        id: (json['id'] as String?) ?? '',
-        username: (json['username'] as String?) ?? '',
-        email: (json['email'] as String?) ?? '',
-        status: (json['status'] as String?) ?? 'offline',
-        avatar: json['avatar'] as String?,
-        isAdmin: (json['isAdmin'] as bool?) ?? false,
+  bool get isOnline => status == 'online';
+
+  User copyWith({String? status, String? avatar, bool clearAvatar = false}) => User(
+        id: id,
+        username: username,
+        email: email,
+        status: status ?? this.status,
+        avatar: clearAvatar ? null : (avatar ?? this.avatar),
+        isAdmin: isAdmin,
       );
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    final avatar = str(json['avatar']);
+    return User(
+      id: str(json['id']),
+      username: str(json['username']),
+      email: str(json['email']),
+      status: json['status'] is String ? json['status'] as String : 'offline',
+      avatar: avatar.isEmpty ? null : avatar,
+      isAdmin: flag(json['isAdmin']),
+    );
+  }
 }
 
 /// A signed-in person and the token that proves it.

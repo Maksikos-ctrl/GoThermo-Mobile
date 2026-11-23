@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose pictures to send and to use as your profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to send in a chat.</string>
 </dict>
 </plist>

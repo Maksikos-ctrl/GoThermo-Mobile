@@ -1,3 +1,5 @@
+import 'json.dart';
+
 class Channel {
   const Channel({
     required this.name,
@@ -13,13 +15,25 @@ class Channel {
   final List<String> members;
   final bool isPrivate;
 
+  /// Direct and group messages are private channels named `dm_<a>_<b>`.
+  bool get isDm => isPrivate && name.startsWith('dm_');
+
+  /// The other people in a direct message (everyone but [me]).
+  List<String> others(String me) {
+    final fromMembers = members.where((m) => m != me).toList();
+    if (fromMembers.isNotEmpty) return fromMembers;
+    return name.split('_').skip(1).where((p) => p.isNotEmpty && p != me).toList();
+  }
+
+  /// What to show as the title: `#general` style names stay as they are, a
+  /// direct message shows who it is with.
+  String title(String me) => isDm ? others(me).join(', ') : name;
+
   factory Channel.fromJson(Map<String, dynamic> json) => Channel(
-        id: (json['id'] as String?) ?? '',
-        name: (json['name'] as String?) ?? '',
-        description: (json['description'] as String?) ?? '',
-        members: ((json['members'] as List<dynamic>?) ?? const [])
-            .whereType<String>()
-            .toList(),
-        isPrivate: (json['isPrivate'] as bool?) ?? false,
+        id: str(json['id']),
+        name: str(json['name']),
+        description: str(json['description']),
+        members: ((json['members'] as List<dynamic>?) ?? const []).whereType<String>().toList(),
+        isPrivate: flag(json['isPrivate']),
       );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The colours of the web and desktop app's default (Midnight) background.
 class Palette {
@@ -11,6 +12,8 @@ class Palette {
   static const accent = Color(0xFF5865F2);
   static const danger = Color(0xFFED4245);
   static const success = Color(0xFF23A55A);
+  static const warning = Color(0xFFF0B232);
+  static const offline = Color(0xFF80848E);
 }
 
 ThemeData buildTheme() {
@@ -32,6 +35,20 @@ ThemeData buildTheme() {
       backgroundColor: Palette.bgSecondary,
       foregroundColor: Palette.textPrimary,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Palette.bgSecondary,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: Palette.bgTertiary,
+      contentTextStyle: const TextStyle(color: Palette.textPrimary),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

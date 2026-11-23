@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/rpc_client.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
+import '../widgets/motion.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.controller});
@@ -53,6 +54,20 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.controller.signInWithGoogle(signUp: _creating);
+    } on RpcException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _editServer() async {
     final field = TextEditingController(text: widget.controller.serverUrl);
     final url = await showDialog<String>(
@@ -90,17 +105,28 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset('assets/logo.png', width: 72, height: 72),
+                  PopIn(
+                    rise: 24,
+                    duration: const Duration(milliseconds: 500),
+                    child: Center(
+                      child: Hero(
+                        tag: 'logo',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset('assets/logo.png', width: 72, height: 72),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    _creating ? 'Create your account' : 'Welcome back',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      _creating ? 'Create your account' : 'Welcome back',
+                      key: ValueKey<bool>(_creating),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   if (_error != null)
@@ -133,16 +159,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: const InputDecoration(labelText: 'Password'),
                     onSubmitted: (_) => _submit(),
                   ),
-                  if (_creating) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      key: const Key('invite'),
-                      controller: _invite,
-                      enabled: !_busy,
-                      autocorrect: false,
-                      decoration: const InputDecoration(labelText: 'Invite code'),
-                    ),
-                  ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _creating
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: TextField(
+                              key: const Key('invite'),
+                              controller: _invite,
+                              enabled: !_busy,
+                              autocorrect: false,
+                              decoration: const InputDecoration(labelText: 'Invite code'),
+                            ),
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
                   const SizedBox(height: 20),
                   FilledButton(
                     key: const Key('submit'),
@@ -154,6 +187,44 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : Text(_creating ? 'Create account' : 'Sign in'),
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('or', style: TextStyle(color: Palette.textMuted)),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton(
+                    key: const Key('google'),
+                    onPressed: _busy ? null : _google,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      side: const BorderSide(color: Palette.border),
+                      foregroundColor: Palette.textPrimary,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                          child: const Text(
+                            'G',
+                            style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(_creating ? 'Sign up with Google' : 'Sign in with Google'),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
