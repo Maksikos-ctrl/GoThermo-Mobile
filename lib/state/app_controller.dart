@@ -10,6 +10,8 @@ import '../cache/local_cache.dart';
 import '../models/user.dart';
 import '../notifications/notification_center.dart';
 import '../notifications/notifier.dart';
+import '../notifications/push_registrar.dart';
+import '../notifications/push_service.dart';
 import '../calls/call_types.dart';
 import '../calls/call_tones.dart';
 import '../calls/webrtc_engine.dart';
@@ -33,7 +35,9 @@ class AppController extends ChangeNotifier {
     CallTones? callTones,
     Future<LocalCache> Function(String owner)? cacheOpener,
     Notifier? notifier,
-  })  : notifications = NotificationCenter(notifier ?? SilentNotifier()),
+    PushService? push,
+  })  : pushRegistrar = PushRegistrar(push ?? SilentPush(available: false)),
+        notifications = NotificationCenter(notifier ?? SilentNotifier()),
         _http = httpClient,
         _connector = connector,
         _google = google,
@@ -46,8 +50,20 @@ class AppController extends ChangeNotifier {
   /// Phone notifications (messages and calls while the app is in the background).
   final NotificationCenter notifications;
 
+  /// Push for when the app is closed.
+  final PushRegistrar pushRegistrar;
+
   /// Channels the person asked to open by tapping a notification.
-  Stream<String> get opens => notifications.opens;
+  Stream<String> get opens {
+    final merged = StreamController<String>.broadcast();
+    final a = notifications.opens.listen(merged.add);
+    final b = pushRegistrar.opens.listen(merged.add);
+    merged.onCancel = () {
+      a.cancel();
+      b.cancel();
+    };
+    return merged.stream;
+  }
   late final ThemeSettings theme = ThemeSettings(store);
   final http.Client? _http;
   final SocketConnector? _connector;
@@ -163,6 +179,7 @@ class AppController extends ChangeNotifier {
       c.calls = k;
       _signalSub = c.signals.listen((e) => k.handleSignal(e.type, e.payload));
       notifications.attach(c, k);
+      unawaited(pushRegistrar.register(api, s.token, s.user.username));
       c.start();
     }
   }
@@ -179,10 +196,14 @@ class AppController extends ChangeNotifier {
     notifications.setBackground(true, chat);
   }
 
-  Future<void> setUpNotifications() => notifications.setUp();
+  Future<void> setUpNotifications() async {
+    await notifications.setUp();
+    await pushRegistrar.start();
+  }
 
   Future<void> signOut() async {
     final s = session;
+    if (s != null) await pushRegistrar.forget(api, s.token, s.user.username);
     await chat?.wipeCache();
     _endChat();
     session = null;
@@ -213,6 +234,7 @@ class AppController extends ChangeNotifier {
     theme.dispose();
     _endChat();
     notifications.dispose();
+    pushRegistrar.dispose();
     super.dispose();
   }
 }

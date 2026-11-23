@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "21065386335",
+    "project_id": "gothermo-a263c",
+    "storage_bucket": "gothermo-a263c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:21065386335:android:6bfcb485648ced2e340eea",
+        "android_client_info": {
+          "package_name": "com.gothermo.gothermo_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPknKHttpI8TWiLSAgNlOglFo8YDUMHRA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

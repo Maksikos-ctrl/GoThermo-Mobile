@@ -60,6 +60,10 @@ class FakeServer {
   Future<void> Function()? beforeSendReply;
   int _id = 100;
 
+  /// Push addresses the server was given, and whether it refuses them.
+  final List<String> devices = [];
+  bool deviceError = false;
+
   /// What the last SendMessage asked for.
   String? lastSentText;
 
@@ -89,6 +93,13 @@ class FakeServer {
       case 'GetIceServers':
         return reply('[{"urls":["stun:stun.example.org"]}]');
       case 'LogCall':
+        return reply(null);
+      case 'RegisterDevice':
+        if (deviceError) return failure('unknown method');
+        devices.add(args[2] as String);
+        return reply(null);
+      case 'UnregisterDevice':
+        devices.remove(args[2] as String);
         return reply(null);
       case 'GifsEnabled':
         return reply(false);

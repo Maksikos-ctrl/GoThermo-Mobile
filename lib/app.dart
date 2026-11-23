@@ -17,6 +17,7 @@ import 'state/chat_controller.dart';
 import 'state/google_auth.dart';
 import 'state/session_store.dart';
 import 'notifications/notifier.dart';
+import 'notifications/push_service.dart';
 import 'state/theme_settings.dart';
 import 'theme.dart';
 import 'widgets/avatar.dart';
@@ -33,6 +34,7 @@ class GoThermoApp extends StatefulWidget {
     this.callTones,
     this.cacheOpener,
     this.notifier,
+    this.push,
   });
 
   final SessionStore store;
@@ -48,6 +50,9 @@ class GoThermoApp extends StatefulWidget {
   /// Shows phone notifications; null keeps them off.
   final Notifier? notifier;
 
+  /// Push for when the app is closed; null keeps it off.
+  final PushService? push;
+
   @override
   State<GoThermoApp> createState() => _GoThermoAppState();
 }
@@ -62,6 +67,7 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
     callTones: widget.callTones,
     cacheOpener: widget.cacheOpener,
     notifier: widget.notifier,
+    push: widget.push,
   );
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
@@ -188,6 +194,10 @@ class _NoticeHostState extends State<NoticeHost> {
   Notice? _shown;
   Timer? _hide;
 
+  /// A channel to open as soon as someone is signed in (a push tapped while
+  /// the app was closed arrives before the chat exists).
+  String? _pending;
+
   @override
   void initState() {
     super.initState();
@@ -211,6 +221,13 @@ class _NoticeHostState extends State<NoticeHost> {
     _sub?.cancel();
     _watching = chat;
     _sub = chat?.notices.listen(_show);
+    final waiting = _pending;
+    if (chat != null && waiting != null) {
+      _pending = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openChannel(waiting);
+      });
+    }
     if (chat == null && _shown != null) {
       _hide?.cancel();
       if (mounted) setState(() => _shown = null);
@@ -233,7 +250,10 @@ class _NoticeHostState extends State<NoticeHost> {
 
   void _openChannel(String channel) {
     final chat = _watching;
-    if (chat == null) return;
+    if (chat == null) {
+      _pending = channel;
+      return;
+    }
     widget.navigator.currentState?.push(
       MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat, channel: channel)),
     );

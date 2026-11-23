@@ -194,6 +194,15 @@ class GoThermoApi {
     await _rpc.call('LogCall', [token, channel, initiator, status, seconds]);
   }
 
+  /// Gives the server this phone's push address.
+  Future<void> registerDevice(String token, String username, String deviceToken) async {
+    await _rpc.call('RegisterDevice', [token, username, deviceToken]);
+  }
+
+  Future<void> unregisterDevice(String token, String username, String deviceToken) async {
+    await _rpc.call('UnregisterDevice', [token, username, deviceToken]);
+  }
+
   Future<void> markRead(String token, String username, String channel) async {
     await _rpc.call('MarkChannelRead', [token, username, channel]);
   }

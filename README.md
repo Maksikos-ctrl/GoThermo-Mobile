@@ -23,7 +23,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - TURN relay support so calls work across different networks
 
 **Notifications**
-- A phone notification for a new message or an incoming call while the app is in the background; tap it to open the channel (see [Notifications](#notifications) for the limits)
+- A phone notification for a new message or an incoming call, also when the app is closed (Firebase push); tap it to open the channel
 
 **Offline**
 - SQLite copy: chats open at once and the last 200 messages per channel can be read with no connection; signing out wipes it
@@ -32,7 +32,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 **Look**
 - Themes: Midnight, Graphite, AMOLED, Light, System; 6 accent colours; text size (Profile → Appearance)
 
-Not included yet: notifications while the app is fully closed (needs FCM push), group calls, screen share, creating channels, reporting messages.
+Not included yet: push on iOS (needs an Apple developer account and an APNs key in Firebase), group calls, screen share, creating channels, reporting messages.
 
 ## Run it
 
@@ -66,9 +66,16 @@ Calls go peer to peer. Across different networks (phone on mobile data, laptop o
 
 ## Notifications
 
-The app shows a system notification when a message arrives (or a call rings) while the app is in the background, and cancels it when you come back. Messages in the channel you are looking at, your own messages and thread updates stay silent. On Android 13+ and iOS the app asks for permission at launch.
+**App in the background.** A system notification appears when a message arrives or a call rings, and goes away when you come back. Messages in the channel you are looking at, your own messages and thread updates stay silent. Android 13+ and iOS ask for permission at launch.
 
-These are *local* notifications: the app has to be alive, which is usually the case for a while after you leave it, but the system will stop it eventually. Delivery to a fully closed app needs push (Firebase Cloud Messaging): a Firebase project, `google-services.json`, an RPC on the server that stores each phone's token, and a sender on the server. That is the next step on the roadmap.
+**App closed (push).** The phone registers its Firebase token with the server (`RegisterDevice`), and the server sends a push through Firebase Cloud Messaging when you have no live connection: every message in a direct message or private channel, messages that `@mention` you in a public channel, and incoming calls. Tapping the push opens the channel.
+
+Set-up, once:
+1. Firebase console → add an Android app with package `com.gothermo.gothermo_mobile`, download `google-services.json` into `android/app/`, then run `python3 tool/patch_platforms.py` (it adds the Google services plugin to Gradle) and `flutter pub get`.
+2. Firebase → Project settings → Service accounts → Generate new private key. Put the file on the server as `secrets/fcm.json` next to `docker-compose.yml` and mount it with `GOTHERMO_FCM_CREDENTIALS=/secrets/fcm.json` (see `SERVER.md`). Keep it out of git.
+3. Server: `GOTHERMO_PUSH_PREVIEW=0` keeps message text out of notifications (they say "New message"). With the default, the text passes through Google's servers.
+
+Without `google-services.json` the app builds and works, just without push; a server without the key sends none.
 
 ## How it fits together
 
@@ -79,7 +86,7 @@ lib/state/          AppController (sign-in), ChatController (channels, messages,
                     pins, threads, decisions, outbox), CallController, theme settings
 lib/cache/          offline copy (SQLite, keyed per account)
 lib/calls/          WebRTC engine and call tones
-lib/notifications/  Notifier (system notifications) and NotificationCenter (when to show them)
+lib/notifications/  Notifier + NotificationCenter (in the background), PushService + PushRegistrar (closed app)
 lib/screens/        login, home, chat, thread, pinned, decisions, search, profile, call
 lib/widgets/        avatars, message rows and actions, composer, emoji / GIF pickers, motion
 lib/util/           markdown, time formatting, mime types, emoji data

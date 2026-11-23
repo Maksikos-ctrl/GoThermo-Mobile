@@ -52,6 +52,35 @@ def patch_gradle(text: str) -> str:
     return text
 
 
+GMS_VERSION = "4.4.2"
+
+
+def patch_settings_gradle(text: str) -> str:
+    """Declares the Google services plugin (needed for push) in the plugins block."""
+    if "com.google.gms.google-services" in text:
+        return text
+    kts = 'id("com.android.application")' in text
+    line = (f'id("com.google.gms.google-services") version "{GMS_VERSION}" apply false'
+            if kts else f'id "com.google.gms.google-services" version "{GMS_VERSION}" apply false')
+    anchor = re.search(r'^([ \t]*)id\(?\s*"com\.android\.application"[^\n]*$', text, re.M)
+    if not anchor:
+        print("  ! could not find the plugins block in settings.gradle; add the Google services plugin by hand")
+        return text
+    return text[: anchor.end()] + "\n" + anchor.group(1) + line + text[anchor.end():]
+
+
+def patch_app_gradle_plugin(text: str) -> str:
+    if "com.google.gms.google-services" in text:
+        return text
+    kts = 'id("com.android.application")' in text
+    line = 'id("com.google.gms.google-services")' if kts else 'id "com.google.gms.google-services"'
+    anchor = re.search(r'^([ \t]*)id\(?\s*"com\.android\.application"[^\n]*$', text, re.M)
+    if not anchor:
+        print("  ! could not find the plugins block in app/build.gradle; add the Google services plugin by hand")
+        return text
+    return text[: anchor.end()] + "\n" + anchor.group(1) + line + text[anchor.end():]
+
+
 def add_key(text: str, key: str, value_xml: str) -> str:
     if f"<key>{key}</key>" in text:
         return text
@@ -123,7 +152,16 @@ if __name__ == "__main__":
     for name in ("build.gradle.kts", "build.gradle"):
         if (root / "android/app" / name).exists():
             edit(root / "android/app" / name, patch_gradle)
+            if (root / "android/app/google-services.json").exists():
+                edit(root / "android/app" / name, patch_app_gradle_plugin)
             break
+    if (root / "android/app/google-services.json").exists():
+        for name in ("settings.gradle.kts", "settings.gradle"):
+            if (root / "android" / name).exists():
+                edit(root / "android" / name, patch_settings_gradle)
+                break
+    else:
+        print("note: android/app/google-services.json not found, so push notifications stay off")
     edit(root / "ios/Runner/Info.plist", patch_ios)
     edit(root / "macos/Runner/DebugProfile.entitlements", patch_macos_entitlements)
     edit(root / "macos/Runner/Release.entitlements", patch_macos_entitlements)

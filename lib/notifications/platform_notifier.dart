@@ -32,6 +32,14 @@ class PlatformNotifier implements Notifier {
           if (p != null && p.isNotEmpty && !_taps.isClosed) _taps.add(p);
         },
       );
+      await _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(const AndroidNotificationChannel(
+            'messages',
+            'Messages',
+            description: 'New messages and incoming calls',
+            importance: Importance.high,
+          ));
       _ready = true;
     } on Object {
       _ready = false; // no notifications on this device; the app works without
