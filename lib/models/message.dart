@@ -87,6 +87,26 @@ class Message {
     );
   }
 
+  /// The same shape the server sends, so [Message.fromJson] reads it back.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'user': user,
+        'text': text,
+        'channel': channel,
+        'timestamp': timestamp.toUtc().toIso8601String(),
+        'reactions': reactions,
+        'isPost': isPost,
+        'isEdited': isEdited,
+        'isFile': isFile,
+        'fileId': fileId,
+        'fileName': fileName,
+        'fileSize': fileSize,
+        'mimeType': mimeType,
+        'isCall': isCall,
+        'callStatus': callStatus,
+        'callDuration': callDuration,
+      };
+
   Message copyWith({
     String? id,
     String? text,

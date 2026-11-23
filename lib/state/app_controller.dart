@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../api/gothermo_api.dart';
 import '../api/rpc_client.dart';
 import '../api/socket.dart';
+import '../cache/local_cache.dart';
 import '../models/user.dart';
 import '../calls/call_types.dart';
 import '../calls/call_tones.dart';
@@ -28,11 +29,13 @@ class AppController extends ChangeNotifier {
     GoogleAuth? google,
     CallEngine? callEngine,
     CallTones? callTones,
+    Future<LocalCache> Function(String owner)? cacheOpener,
   })  : _http = httpClient,
         _connector = connector,
         _google = google,
         _callEngine = callEngine,
-        _callTones = callTones;
+        _callTones = callTones,
+        _cacheOpener = cacheOpener;
 
   final SessionStore store;
   late final ThemeSettings theme = ThemeSettings(store);
@@ -41,6 +44,7 @@ class AppController extends ChangeNotifier {
   GoogleAuth? _google;
   final CallEngine? _callEngine;
   final CallTones? _callTones;
+  final Future<LocalCache> Function(String owner)? _cacheOpener;
   StreamSubscription<SocketEvent>? _signalSub;
 
   AuthState state = AuthState.starting;
@@ -122,7 +126,15 @@ class AppController extends ChangeNotifier {
     session = s;
     state = AuthState.signedIn;
     if (!s.user.isAdmin) {
-      final c = ChatController(api: api, session: s, serverUrl: serverUrl, connector: _connector);
+      final opener = _cacheOpener;
+      final owner = '$serverUrl|${s.user.username}';
+      final c = ChatController(
+        api: api,
+        session: s,
+        serverUrl: serverUrl,
+        connector: _connector,
+        openCache: opener == null ? null : () => opener(owner),
+      );
       chat = c;
       final callApi = api;
       final k = CallController(
@@ -148,6 +160,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> signOut() async {
     final s = session;
+    await chat?.wipeCache();
     _endChat();
     session = null;
     state = AuthState.signedOut;

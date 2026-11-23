@@ -13,6 +13,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - Search across channels, profile picture and status, in-app banners for new messages
 - Voice and video calls (1:1, WebRTC, works with the web and desktop apps)
 - Themes: Midnight, Graphite, AMOLED, Light, System; 6 accent colours; text size (Profile → Appearance)
+- Offline copy (SQLite): chats open at once and the last 200 messages per channel can be read without a connection; signing out wipes it
 - Animations matching the web and desktop apps
 
 Not included yet: incoming calls while the app is closed (needs push / CallKit and device-token storage on the server), group calls, sending screen share, creating channels.

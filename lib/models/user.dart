@@ -28,6 +28,15 @@ class User {
         isAdmin: isAdmin,
       );
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'username': username,
+        'email': email,
+        'status': status,
+        'avatar': avatar ?? '',
+        'isAdmin': isAdmin,
+      };
+
   factory User.fromJson(Map<String, dynamic> json) {
     final avatar = str(json['avatar']);
     return User(

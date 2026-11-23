@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../api/gothermo_api.dart';
 import '../api/rpc_client.dart';
 import '../api/socket.dart';
+import '../cache/local_cache.dart';
 import '../models/channel.dart';
 import '../models/message.dart';
 import '../models/user.dart';
@@ -68,8 +69,10 @@ class ChatController extends ChangeNotifier {
     required this.serverUrl,
     SocketConnector? connector,
     DateTime Function()? clock,
+    Future<LocalCache> Function()? openCache,
     this.pollEvery = const Duration(seconds: 8),
   })  : _connector = connector ?? const WebSocketConnector(),
+        _openCache = openCache,
         _now = clock ?? DateTime.now;
 
   final GoThermoApi api;
@@ -78,6 +81,9 @@ class ChatController extends ChangeNotifier {
   final Duration pollEvery;
   final SocketConnector _connector;
   final DateTime Function() _now;
+  final Future<LocalCache> Function()? _openCache;
+  LocalCache? _cache;
+  Future<void>? _cacheReady;
 
   String get me => session.user.username;
   String get token => session.token;
@@ -169,6 +175,8 @@ class ChatController extends ChangeNotifier {
   // ---- starting ------------------------------------------------------------
 
   Future<void> start() async {
+    await _prepareCache();
+    await _restoreLists();
     await refreshLists();
     started = true;
     notifyListeners();
@@ -194,14 +202,24 @@ class ChatController extends ChangeNotifier {
   Future<void> refreshLists() async {
     error = null;
     await Future.wait([
-      _guard(() async => channels = _sortedChannels(await api.channels(token))),
-      _guard(() async => dms = await api.dmChannels(token, me)),
-      _guard(() async => _setUsers(await api.users(token))),
+      _guard(() async {
+        channels = _sortedChannels(await api.channels(token));
+        _save('channels', [for (final c in channels) c.toJson()]);
+      }),
+      _guard(() async {
+        dms = await api.dmChannels(token, me);
+        _save('dms', [for (final c in dms) c.toJson()]);
+      }),
+      _guard(() async {
+        _setUsers(await api.users(token));
+        _save('users', [for (final u in users.values) u.toJson()]);
+      }),
       _guard(() async {
         unread
           ..clear()
           ..addAll(await api.unreadCounts(token, me));
         if (active != null) unread[active!] = 0;
+        _save('unread', unread);
       }),
     ]);
     notifyListeners();
@@ -223,6 +241,7 @@ class ChatController extends ChangeNotifier {
     unread[channel] = 0;
     _sendFrame('subscribe_channel', channel);
     notifyListeners();
+    await _restoreFeed(channel);
     await loadNewest(channel);
     _markRead(channel);
   }
@@ -239,7 +258,9 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await api.messagesPage(token, channel, limit: pageSize);
+      _forgetGone(channel, page.messages);
       _merge(channel, page.messages);
+      _remember(channel, page.messages);
       if (!f.loaded) f.hasMore = page.hasMore ?? page.messages.length >= pageSize;
       f.loaded = true;
       error = null;
@@ -262,6 +283,7 @@ class ChatController extends ChangeNotifier {
     try {
       final page = await api.messagesPage(token, channel, beforeId: oldest.id, limit: pageSize);
       _merge(channel, page.messages);
+      _remember(channel, page.messages);
       f.hasMore = page.hasMore ?? page.messages.length >= pageSize;
     } on RpcException catch (e) {
       error = e.message;
@@ -299,6 +321,110 @@ class ChatController extends ChangeNotifier {
   void _rememberLast(String channel, Message m) {
     final old = lastMessage[channel];
     if (old == null || !m.timestamp.isBefore(old.timestamp)) lastMessage[channel] = m;
+  }
+
+  // ---- the offline copy ------------------------------------------------------------
+
+  Future<void> _prepareCache() => _cacheReady ??= () async {
+        final open = _openCache;
+        if (open == null) return;
+        try {
+          _cache = GuardedCache(await open());
+        } on Object {
+          _cache = null; // no offline copy this time; the app works as before
+        }
+      }();
+
+  void _save(String key, Object? value) => unawaited(_cache?.writeValue(key, value));
+
+  List<Map<String, dynamic>> _maps(Object? v) =>
+      v is List ? v.whereType<Map<String, dynamic>>().toList() : const [];
+
+  /// Channels, people and last messages from the last run, so the lists show
+  /// at once and still show something with no connection.
+  Future<void> _restoreLists() async {
+    final cache = _cache;
+    if (cache == null) return;
+    final ch = _maps(await cache.readValue('channels')).map(Channel.fromJson).toList();
+    final dm = _maps(await cache.readValue('dms')).map(Channel.fromJson).toList();
+    if (ch.isEmpty && dm.isEmpty) return;
+    channels = _sortedChannels(ch);
+    dms = dm;
+    for (final u in _maps(await cache.readValue('users')).map(User.fromJson)) {
+      // Whether somebody is online now is only known from the server.
+      users[u.username] = u.copyWith(status: 'offline');
+    }
+    final counts = await cache.readValue('unread');
+    if (counts is Map) {
+      counts.forEach((k, v) {
+        if (k is String && v is num) unread[k] = v.toInt();
+      });
+    }
+    await Future.wait([
+      for (final c in [...channels, ...dms])
+        () async {
+          final last = _maps(await cache.readMessages(c.name, limit: 1));
+          if (last.isNotEmpty) _rememberLast(c.name, Message.fromJson(last.first));
+        }(),
+    ]);
+    started = true;
+    notifyListeners();
+  }
+
+  /// The cached messages of a channel go on screen before the server answers.
+  Future<void> _restoreFeed(String channel) async {
+    final cache = _cache;
+    final f = feed(channel);
+    if (cache == null || f.loaded || f.messages.isNotEmpty) return;
+    final saved = _maps(await cache.readMessages(channel));
+    if (saved.isEmpty || f.messages.isNotEmpty) return;
+    for (final j in saved) {
+      _put(f, Message.fromJson(j));
+    }
+    _sort(f);
+    _rememberLast(channel, f.messages.last);
+    notifyListeners();
+  }
+
+  void _remember(String channel, Iterable<Message> list) {
+    final cache = _cache;
+    if (cache == null) return;
+    final items = [
+      for (final m in list)
+        if (m.sendState == SendState.sent && m.id.isNotEmpty && !m.id.startsWith('local-'))
+          CachedMessage(m.id, m.timestamp.millisecondsSinceEpoch, m.toJson()),
+    ];
+    if (items.isNotEmpty) unawaited(cache.putMessages(channel, items));
+  }
+
+  /// Messages deleted while this phone was away: inside the time the fresh page
+  /// covers, whatever the server no longer lists is gone.
+  void _forgetGone(String channel, List<Message> page) {
+    if (page.isEmpty) return;
+    final f = feed(channel);
+    final ids = page.map((m) => m.id).toSet();
+    final from = page.map((m) => m.timestamp).reduce((a, b) => a.isBefore(b) ? a : b);
+    final recent = _now().subtract(const Duration(seconds: 30));
+    final gone = f.messages
+        .where((m) =>
+            m.sendState == SendState.sent &&
+            !ids.contains(m.id) &&
+            !m.timestamp.isBefore(from) &&
+            m.timestamp.isBefore(recent))
+        .map((m) => m.id)
+        .toList();
+    for (final id in gone) {
+      f.messages.removeWhere((m) => m.id == id);
+      unawaited(_cache?.deleteMessage(channel, id));
+    }
+  }
+
+  /// Signing out: nothing of this account stays on the phone.
+  Future<void> wipeCache() async {
+    await _prepareCache();
+    final cache = _cache;
+    _cache = null; // nothing is written after this
+    await cache?.clear();
   }
 
   // ---- who is typing ---------------------------------------------------------------
@@ -390,7 +516,9 @@ class ChatController extends ChangeNotifier {
       final f = feed(pending.channel);
       f.messages.removeWhere((m) => m.id == pending.id);
       if (id.isNotEmpty && !f.messages.any((m) => m.id == id)) {
-        f.messages.add(pending.copyWith(id: id, sendState: SendState.sent));
+        final sent = pending.copyWith(id: id, sendState: SendState.sent);
+        f.messages.add(sent);
+        _remember(pending.channel, [sent]);
       }
       _sort(f);
     } on RpcException catch (e) {
@@ -427,6 +555,7 @@ class ChatController extends ChangeNotifier {
       _put(f, msg);
       _sort(f);
       _rememberLast(channel, msg);
+      _remember(channel, [msg]);
       notifyListeners();
       return null;
     } on RpcException catch (e) {
@@ -473,6 +602,7 @@ class ChatController extends ChangeNotifier {
     final i = f.messages.indexWhere((x) => x.id == id);
     if (i >= 0) {
       f.messages[i] = change(f.messages[i]);
+      _remember(channel, [f.messages[i]]);
       notifyListeners();
     }
   }
@@ -480,6 +610,7 @@ class ChatController extends ChangeNotifier {
   void _remove(String channel, String id) {
     final f = feed(channel);
     f.messages.removeWhere((x) => x.id == id);
+    unawaited(_cache?.deleteMessage(channel, id));
     if (f.messages.isNotEmpty) {
       lastMessage[channel] = f.messages.last;
     } else {
@@ -769,6 +900,7 @@ class ChatController extends ChangeNotifier {
       _sort(f);
     }
     _rememberLast(channel, m);
+    _remember(channel, [m]);
 
     if (!existed && m.user != me) {
       if (channel == active) {

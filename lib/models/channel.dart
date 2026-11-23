@@ -29,6 +29,14 @@ class Channel {
   /// direct message shows who it is with.
   String title(String me) => isDm ? others(me).join(', ') : name;
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'members': members,
+        'isPrivate': isPrivate,
+      };
+
   factory Channel.fromJson(Map<String, dynamic> json) => Channel(
         id: str(json['id']),
         name: str(json['name']),

@@ -50,6 +50,9 @@ class FakeServer {
   Map<String, int> unread = {};
   Map<String, List<Map<String, dynamic>>> messages = {};
   String? sendError;
+
+  /// True = the network is gone: every call fails to reach the server.
+  bool down = false;
   String? loginError;
   Future<void> Function()? beforeSendReply;
   int _id = 100;
@@ -58,6 +61,7 @@ class FakeServer {
   String? lastSentText;
 
   late final MockClient client = MockClient((req) async {
+    if (down) throw Exception('offline');
     final method = req.url.pathSegments.last;
     final args = jsonDecode(req.body) as List<dynamic>;
     calls.add(method);

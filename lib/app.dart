@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'api/socket.dart';
+import 'cache/local_cache.dart';
 import 'calls/call_types.dart';
 import 'screens/admin_screen.dart';
 import 'screens/call_screen.dart';
@@ -29,6 +30,7 @@ class GoThermoApp extends StatefulWidget {
     this.googleAuth,
     this.callEngine,
     this.callTones,
+    this.cacheOpener,
   });
 
   final SessionStore store;
@@ -36,6 +38,9 @@ class GoThermoApp extends StatefulWidget {
   final SocketConnector? connector;
   final GoogleAuth? googleAuth;
   final CallEngine? callEngine;
+
+  /// Opens the offline copy of one account's chats; null keeps nothing on the phone.
+  final Future<LocalCache> Function(String owner)? cacheOpener;
   final CallTones? callTones;
 
   @override
@@ -50,6 +55,7 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
     google: widget.googleAuth,
     callEngine: widget.callEngine,
     callTones: widget.callTones,
+    cacheOpener: widget.cacheOpener,
   );
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
