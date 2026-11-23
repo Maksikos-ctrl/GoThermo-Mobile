@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -5,9 +7,14 @@ import '../api/gothermo_api.dart';
 import '../api/rpc_client.dart';
 import '../api/socket.dart';
 import '../models/user.dart';
+import '../calls/call_types.dart';
+import '../calls/call_tones.dart';
+import '../calls/webrtc_engine.dart';
+import 'call_controller.dart';
 import 'chat_controller.dart';
 import 'google_auth.dart';
 import 'session_store.dart';
+import 'theme_settings.dart';
 
 enum AuthState { starting, signedOut, signedIn }
 
@@ -19,19 +26,30 @@ class AppController extends ChangeNotifier {
     http.Client? httpClient,
     SocketConnector? connector,
     GoogleAuth? google,
+    CallEngine? callEngine,
+    CallTones? callTones,
   })  : _http = httpClient,
         _connector = connector,
-        _google = google;
+        _google = google,
+        _callEngine = callEngine,
+        _callTones = callTones;
 
   final SessionStore store;
+  late final ThemeSettings theme = ThemeSettings(store);
   final http.Client? _http;
   final SocketConnector? _connector;
   GoogleAuth? _google;
+  final CallEngine? _callEngine;
+  final CallTones? _callTones;
+  StreamSubscription<SocketEvent>? _signalSub;
 
   AuthState state = AuthState.starting;
   String serverUrl = defaultServerUrl;
   Session? session;
   ChatController? chat;
+
+  /// Voice / video calls; exists whenever [chat] does.
+  CallController? call;
   late GoThermoApi api = _buildApi();
 
   GoogleAuth get google => _google ??= PlatformGoogleAuth();
@@ -40,6 +58,7 @@ class AppController extends ChangeNotifier {
 
   /// Reads what was saved and checks the saved token with the server.
   Future<void> start() async {
+    await theme.load();
     serverUrl = await store.readServer();
     api = _buildApi();
     final token = await store.readToken();
@@ -89,14 +108,37 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _begin(Session s) {
+  void _endChat() {
+    _signalSub?.cancel();
+    _signalSub = null;
+    call?.dispose();
+    call = null;
     chat?.dispose();
     chat = null;
+  }
+
+  void _begin(Session s) {
+    _endChat();
     session = s;
     state = AuthState.signedIn;
     if (!s.user.isAdmin) {
       final c = ChatController(api: api, session: s, serverUrl: serverUrl, connector: _connector);
       chat = c;
+      final callApi = api;
+      final k = CallController(
+        me: s.user.username,
+        engine: _callEngine ?? WebRtcEngine(),
+        tones: _callTones ?? PlatformCallTones(),
+        sendSignal: c.sendSignal,
+        loadIceServers: () => callApi.iceServers(s.token),
+        logCall: (who, outcome, seconds) async {
+          final dm = await c.directMessageWith(who);
+          await callApi.logCall(s.token, dm.name, s.user.username, outcome.name, seconds);
+        },
+      );
+      call = k;
+      c.calls = k;
+      _signalSub = c.signals.listen((e) => k.handleSignal(e.type, e.payload));
       c.start();
     }
   }
@@ -106,8 +148,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> signOut() async {
     final s = session;
-    chat?.dispose();
-    chat = null;
+    _endChat();
     session = null;
     state = AuthState.signedOut;
     await store.clearToken();
@@ -133,7 +174,8 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
-    chat?.dispose();
+    theme.dispose();
+    _endChat();
     super.dispose();
   }
 }

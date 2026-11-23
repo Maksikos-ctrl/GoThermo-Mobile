@@ -79,6 +79,10 @@ class FakeServer {
         return reply(users);
       case 'GetUnreadCounts':
         return reply(unread);
+      case 'GetIceServers':
+        return reply('[{"urls":["stun:stun.example.org"]}]');
+      case 'LogCall':
+        return reply(null);
       case 'GifsEnabled':
         return reply(false);
       case 'MarkChannelRead':
@@ -92,8 +96,10 @@ class FakeServer {
           final i = list.indexWhere((m) => m['id'] == before);
           list = i < 0 ? const [] : list.sublist(0, i);
         }
-        if (list.length > limit) list = list.sublist(list.length - limit);
-        return reply(list);
+        final more = list.length > limit;
+        if (more) list = list.sublist(list.length - limit);
+        // Same shape as the real server.
+        return reply({'messages': list, 'hasMore': more});
       case 'SendMessage':
         if (sendError != null) return failure(sendError!);
         lastSentText = args[2] as String;

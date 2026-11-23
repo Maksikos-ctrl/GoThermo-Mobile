@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Text(_creating ? 'Create account' : 'Sign in'),
                   ),
                   const SizedBox(height: 16),
-                  const Row(
+                  Row(
                     children: [
                       Expanded(child: Divider()),
                       Padding(
@@ -205,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _busy ? null : _google,
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
-                      side: const BorderSide(color: Palette.border),
+                      side: BorderSide(color: Palette.border),
                       foregroundColor: Palette.textPrimary,
                     ),
                     child: Row(
@@ -240,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _busy ? null : _editServer,
                     child: Text(
                       'Server: ${widget.controller.serverUrl.replaceFirst('https://', '')}',
-                      style: const TextStyle(color: Palette.textMuted, fontSize: 12),
+                      style: TextStyle(color: Palette.textMuted, fontSize: 12),
                     ),
                   ),
                 ],

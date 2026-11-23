@@ -2,8 +2,8 @@
 """Small edits to the Android / iOS projects that `flutter create` makes.
 
 Safe to run again: each edit is skipped when it is already there.
-  - Android: internet permission (release builds need it) and the app name
-  - iOS: the name under the icon, photo / camera texts, and (when the
+  - Android: internet, microphone, camera and audio permissions (calls) and the app name
+  - iOS: the name under the icon, photo / camera / microphone texts, and (when the
     GOOGLE_IOS_CLIENT_ID environment variable is set) the Google sign-in URL scheme
 """
 import os
@@ -14,13 +14,25 @@ import sys
 root = pathlib.Path(__file__).resolve().parent.parent
 
 
+ANDROID_PERMISSIONS = [
+    '<uses-permission android:name="android.permission.INTERNET"/>',
+    '<uses-permission android:name="android.permission.RECORD_AUDIO"/>',
+    '<uses-permission android:name="android.permission.CAMERA"/>',
+    '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>',
+    '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
+    '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
+    '<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>',
+    '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>',
+    '<uses-feature android:name="android.hardware.camera" android:required="false"/>',
+    '<uses-feature android:name="android.hardware.microphone" android:required="false"/>',
+]
+
+
 def patch_android(text: str) -> str:
-    if "android.permission.INTERNET" not in text:
-        text = text.replace(
-            "<application",
-            '<uses-permission android:name="android.permission.INTERNET"/>\n    <application',
-            1,
-        )
+    for line in ANDROID_PERMISSIONS:
+        name = re.search(r'android:name="([^"]+)"', line).group(1)
+        if f'android:name="{name}"' not in text:
+            text = text.replace("<application", line + "\n    <application", 1)
     return re.sub(r'(android:label=")[^"]*(")', r"\1GoThermo\2", text, count=1)
 
 
@@ -40,7 +52,9 @@ def patch_ios(text: str) -> str:
     text = add_key(text, "NSPhotoLibraryUsageDescription",
                    "<string>Choose pictures to send and to use as your profile picture.</string>")
     text = add_key(text, "NSCameraUsageDescription",
-                   "<string>Take a photo to send in a chat.</string>")
+                   "<string>Take a photo to send in a chat, or show yourself in a video call.</string>")
+    text = add_key(text, "NSMicrophoneUsageDescription",
+                   "<string>The microphone is used for voice and video calls.</string>")
     client = os.environ.get("GOOGLE_IOS_CLIENT_ID", "").strip()
     if client.endswith(".apps.googleusercontent.com") and "GIDClientID" not in text:
         reversed_id = "com.googleusercontent.apps." + client[: -len(".apps.googleusercontent.com")]
@@ -67,7 +81,31 @@ def edit(path: pathlib.Path, fn) -> None:
         print(f"already fine: {path.relative_to(root)}")
 
 
+MAC_ENTITLEMENTS = [
+    "com.apple.security.network.client",
+    "com.apple.security.device.audio-input",
+    "com.apple.security.device.camera",
+]
+
+
+def patch_macos_entitlements(text: str) -> str:
+    for key in MAC_ENTITLEMENTS:
+        if f"<key>{key}</key>" not in text:
+            text = text.replace("</dict>\n</plist>", f"\t<key>{key}</key>\n\t<true/>\n</dict>\n</plist>", 1)
+    return text
+
+
+def patch_macos_info(text: str) -> str:
+    text = add_key(text, "NSMicrophoneUsageDescription",
+                   "<string>The microphone is used for voice and video calls.</string>")
+    return add_key(text, "NSCameraUsageDescription",
+                   "<string>The camera is used for video calls.</string>")
+
+
 if __name__ == "__main__":
     edit(root / "android/app/src/main/AndroidManifest.xml", patch_android)
     edit(root / "ios/Runner/Info.plist", patch_ios)
+    edit(root / "macos/Runner/DebugProfile.entitlements", patch_macos_entitlements)
+    edit(root / "macos/Runner/Release.entitlements", patch_macos_entitlements)
+    edit(root / "macos/Runner/Info.plist", patch_macos_info)
     sys.exit(0)

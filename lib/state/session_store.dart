@@ -10,6 +10,10 @@ abstract class SessionStore {
   Future<void> clearToken();
   Future<String> readServer();
   Future<void> writeServer(String url);
+
+  /// Small settings (theme, text size). Null when never saved.
+  Future<String?> readPref(String key);
+  Future<void> writePref(String key, String value);
 }
 
 /// The real thing: the token in the system keychain / keystore.
@@ -41,6 +45,18 @@ class PlatformSessionStore implements SessionStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_serverKey, url);
   }
+
+  @override
+  Future<String?> readPref(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('gothermo.pref.$key');
+  }
+
+  @override
+  Future<void> writePref(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('gothermo.pref.$key', value);
+  }
 }
 
 /// For tests.
@@ -64,4 +80,12 @@ class MemorySessionStore implements SessionStore {
 
   @override
   Future<void> writeServer(String url) async => server = url;
+
+  final Map<String, String> prefs = {};
+
+  @override
+  Future<String?> readPref(String key) async => prefs[key];
+
+  @override
+  Future<void> writePref(String key, String value) async => prefs[key] = value;
 }

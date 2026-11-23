@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -11,6 +12,7 @@ import '../models/channel.dart';
 import '../models/message.dart';
 import '../models/user.dart';
 import '../util/mime.dart';
+import 'call_controller.dart';
 
 /// The messages of one channel as far as this phone has loaded them.
 class ChannelFeed {
@@ -92,10 +94,20 @@ class ChatController extends ChangeNotifier {
   bool gifsEnabled = false;
   String? error;
 
+  /// Set by the app so a conversation screen can start a call.
+  CallController? calls;
+
   /// The channel on screen right now, if any.
   String? active;
 
   Stream<Notice> get notices => _notices.stream;
+
+  /// Call signals from other people (offers, answers, candidates, hang-ups).
+  Stream<SocketEvent> get signals => _signals.stream;
+  final StreamController<SocketEvent> _signals = StreamController<SocketEvent>.broadcast();
+
+  /// Sends a call signal to another person through the server.
+  void sendSignal(String type, Map<String, dynamic> payload) => _sendFrame(type, payload);
   final StreamController<Notice> _notices = StreamController<Notice>.broadcast();
 
   int get totalUnread => unread.values.fold(0, (a, b) => a + b);
@@ -146,9 +158,11 @@ class ChatController extends ChangeNotifier {
     _ping?.cancel();
     _reconnect?.cancel();
     _poll?.cancel();
+    _typingTimer?.cancel();
     _sub?.cancel();
     _conn?.close();
     _notices.close();
+    _signals.close();
     super.dispose();
   }
 
@@ -225,8 +239,8 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await api.messagesPage(token, channel, limit: pageSize);
-      _merge(channel, page);
-      if (!f.loaded) f.hasMore = page.length >= pageSize;
+      _merge(channel, page.messages);
+      if (!f.loaded) f.hasMore = page.hasMore ?? page.messages.length >= pageSize;
       f.loaded = true;
       error = null;
     } on RpcException catch (e) {
@@ -247,8 +261,8 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await api.messagesPage(token, channel, beforeId: oldest.id, limit: pageSize);
-      _merge(channel, page);
-      f.hasMore = page.length >= pageSize;
+      _merge(channel, page.messages);
+      f.hasMore = page.hasMore ?? page.messages.length >= pageSize;
     } on RpcException catch (e) {
       error = e.message;
     } finally {
@@ -285,6 +299,66 @@ class ChatController extends ChangeNotifier {
   void _rememberLast(String channel, Message m) {
     final old = lastMessage[channel];
     if (old == null || !m.timestamp.isBefore(old.timestamp)) lastMessage[channel] = m;
+  }
+
+  // ---- who is typing ---------------------------------------------------------------
+
+  static const typingTtl = Duration(seconds: 5);
+  static const typingGap = Duration(seconds: 3);
+  final Map<String, Map<String, DateTime>> _typing = {};
+  Timer? _typingTimer;
+  String _typingSentIn = '';
+  DateTime? _typingSentAt;
+
+  /// Other people typing in [channel] right now, by name.
+  List<String> typingIn(String channel) {
+    final now = _now();
+    final names = (_typing[channel] ?? const <String, DateTime>{})
+        .entries
+        .where((e) => e.value.isAfter(now) && e.key != me)
+        .map((e) => e.key)
+        .toList()
+      ..sort();
+    return names;
+  }
+
+  /// Tells the others that this phone is typing (at most once every few seconds).
+  void announceTyping(String channel) {
+    final now = _now();
+    final at = _typingSentAt;
+    if (channel == _typingSentIn && at != null && now.difference(at) < typingGap) return;
+    _typingSentIn = channel;
+    _typingSentAt = now;
+    _sendFrame('typing', channel);
+  }
+
+  void _noteTyping(String channel, String user) {
+    if (user == me) return;
+    (_typing[channel] ??= {})[user] = _now().add(typingTtl);
+    _typingTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _pruneTyping());
+    notifyListeners();
+  }
+
+  void _clearTyping(String channel, String user) {
+    final inChannel = _typing[channel];
+    if (inChannel == null || inChannel.remove(user) == null) return;
+    if (inChannel.isEmpty) _typing.remove(channel);
+  }
+
+  void _pruneTyping() {
+    final now = _now();
+    var changed = false;
+    for (final users in _typing.values) {
+      final before = users.length;
+      users.removeWhere((_, until) => !until.isAfter(now));
+      if (users.length != before) changed = true;
+    }
+    _typing.removeWhere((_, users) => users.isEmpty);
+    if (_typing.isEmpty) {
+      _typingTimer?.cancel();
+      _typingTimer = null;
+    }
+    if (changed) notifyListeners();
   }
 
   // ---- sending -----------------------------------------------------------------
@@ -586,6 +660,15 @@ class ChatController extends ChangeNotifier {
   void _onEvent(SocketEvent e) {
     final p = e.payload;
     switch (e.type) {
+      case 'call_offer':
+      case 'call_answer':
+      case 'call_ice_candidate':
+      case 'call_reject':
+      case 'call_end':
+      case 'call_renegotiate_offer':
+      case 'call_renegotiate_answer':
+      case 'call_screen_share_status':
+        if (!_signals.isClosed) _signals.add(e);
       case 'channel_message':
         final m = _asMap(p);
         final raw = _asMap(m?['message']);
@@ -596,6 +679,11 @@ class ChatController extends ChangeNotifier {
         final channel = m?['channel'];
         final id = m?['messageId'];
         if (channel is String && id is String) _remove(channel, id);
+      case 'typing':
+        final m = _asMap(p);
+        final channel = m?['channel'];
+        final user = m?['username'];
+        if (channel is String && user is String) _noteTyping(channel, user);
       case 'channel_created':
         final m = _asMap(p);
         if (m != null) _onChannelCreated(Channel.fromJson(m));
@@ -663,6 +751,7 @@ class ChatController extends ChangeNotifier {
   }
 
   void _onIncoming(String channel, Message m) {
+    _clearTyping(channel, m.user);
     final f = _feeds[channel];
     final existed = f != null && f.messages.any((x) => x.id == m.id);
 

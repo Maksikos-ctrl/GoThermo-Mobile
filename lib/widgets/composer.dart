@@ -15,6 +15,7 @@ class Composer extends StatefulWidget {
     required this.onSend,
     required this.onAttach,
     this.onGif,
+    this.onTyping,
   });
 
   final String hint;
@@ -23,6 +24,9 @@ class Composer extends StatefulWidget {
 
   /// Null hides the GIF button (the server has no GIF key).
   final VoidCallback? onGif;
+
+  /// Called while the person types.
+  final VoidCallback? onTyping;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -39,6 +43,7 @@ class _ComposerState extends State<Composer> {
     super.initState();
     _text.addListener(() {
       final has = _text.text.trim().isNotEmpty;
+      if (has) widget.onTyping?.call();
       if (has != _hasText) setState(() => _hasText = has);
     });
     _focus.addListener(() {

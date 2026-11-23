@@ -17,6 +17,7 @@ import '../widgets/message_actions.dart';
 import '../widgets/message_row.dart';
 import '../widgets/motion.dart';
 import '../widgets/toast.dart';
+import '../widgets/typing_indicator.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.chat, required this.channel});
@@ -143,6 +144,7 @@ class _ChatScreenState extends State<ChatScreen> {
           appBar: AppBar(
             titleSpacing: 0,
             title: _title(),
+            actions: _callButtons(),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(2),
               child: AnimatedOpacity(
@@ -156,7 +158,9 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               ConnectionBanner(visible: chat.started && !chat.connected),
               Expanded(child: _body()),
+              TypingIndicator(names: chat.typingIn(channel)),
               Composer(
+                onTyping: () => chat.announceTyping(channel),
                 hint: 'Message ${chat.titleOf(channel)}',
                 onSend: _send,
                 onAttach: _attach,
@@ -215,9 +219,35 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         Text(chat.titleOf(channel), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17)),
         if (subtitle != null)
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Palette.textMuted)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Palette.textMuted)),
       ],
     );
+  }
+
+  /// Voice and video call buttons, for a conversation with exactly one other person.
+  List<Widget> _callButtons() {
+    final ch = chat.channelNamed(channel);
+    final calls = chat.calls;
+    if (ch == null || !ch.isDm || calls == null) return const [];
+    final others = ch.others(chat.me);
+    if (others.length != 1) return const [];
+    final peer = others.first;
+    final ready = chat.connected && !calls.busy;
+    return [
+      IconButton(
+        key: const Key('call-voice'),
+        tooltip: 'Voice call',
+        icon: const Icon(Icons.call_outlined),
+        onPressed: ready ? () => calls.start(peer) : null,
+      ),
+      IconButton(
+        key: const Key('call-video'),
+        tooltip: 'Video call',
+        icon: const Icon(Icons.videocam_outlined),
+        onPressed: ready ? () => calls.start(peer, video: true) : null,
+      ),
+      const SizedBox(width: 4),
+    ];
   }
 
   Widget _body() {
@@ -253,8 +283,8 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               const Text('👋', style: TextStyle(fontSize: 44)),
               const SizedBox(height: 8),
-              Text('No messages in ${chat.titleOf(channel)} yet', style: const TextStyle(color: Palette.textMuted)),
-              const Text('Say hi!', style: TextStyle(color: Palette.textMuted)),
+              Text('No messages in ${chat.titleOf(channel)} yet', style: TextStyle(color: Palette.textMuted)),
+              Text('Say hi!', style: TextStyle(color: Palette.textMuted)),
             ],
           ),
         ),
@@ -343,7 +373,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Text(
         'This is the start of ${chat.titleOf(channel)}',
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Palette.textMuted, fontSize: 12.5),
+        style: TextStyle(color: Palette.textMuted, fontSize: 12.5),
       ),
     );
   }

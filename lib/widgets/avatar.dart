@@ -74,11 +74,13 @@ Color statusColor(String status) {
 
 /// The little coloured dot for online / away / offline.
 class StatusDot extends StatelessWidget {
-  const StatusDot({super.key, required this.status, this.size = 12, this.ring = Palette.bgPrimary});
+  const StatusDot({super.key, required this.status, this.size = 12, this.ring});
 
   final String status;
   final double size;
-  final Color ring;
+
+  /// The colour around the dot; the page background when null.
+  final Color? ring;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +91,7 @@ class StatusDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: statusColor(status),
         shape: BoxShape.circle,
-        border: Border.all(color: ring, width: size * 0.2),
+        border: Border.all(color: ring ?? Palette.bgPrimary, width: size * 0.2),
       ),
     );
   }
@@ -103,14 +105,14 @@ class PresenceAvatar extends StatelessWidget {
     this.picture,
     this.status,
     this.size = 40,
-    this.ring = Palette.bgPrimary,
+    this.ring,
   });
 
   final String username;
   final String? picture;
   final String? status;
   final double size;
-  final Color ring;
+  final Color? ring;
 
   @override
   Widget build(BuildContext context) {

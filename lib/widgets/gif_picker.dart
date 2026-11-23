@@ -98,7 +98,7 @@ class _GifPickerState extends State<GifPicker> {
               ),
             ),
             Expanded(child: _results()),
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
               child: Text('Powered by GIPHY', style: TextStyle(color: Palette.textMuted, fontSize: 11)),
             ),
@@ -122,7 +122,7 @@ class _GifPickerState extends State<GifPicker> {
       return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)));
     }
     if (_gifs.isEmpty) {
-      return const Center(child: Text('Nothing found', style: TextStyle(color: Palette.textMuted)));
+      return Center(child: Text('Nothing found', style: TextStyle(color: Palette.textMuted)));
     }
     return GridView.builder(
       padding: const EdgeInsets.all(12),
@@ -147,7 +147,7 @@ class _GifPickerState extends State<GifPicker> {
                 fit: BoxFit.cover,
                 loadingBuilder: (context, child, progress) =>
                     progress == null ? child : const Skeleton(height: 120, radius: 12),
-                errorBuilder: (context, error, stack) => const ColoredBox(
+                errorBuilder: (context, error, stack) => ColoredBox(
                   color: Palette.bgTertiary,
                   child: Center(child: Icon(Icons.broken_image_outlined, color: Palette.textMuted)),
                 ),

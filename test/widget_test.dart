@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gothermo_mobile/app.dart';
+import 'package:gothermo_mobile/calls/call_types.dart';
 import 'package:gothermo_mobile/state/google_auth.dart';
 import 'package:gothermo_mobile/state/session_store.dart';
+import 'package:gothermo_mobile/theme.dart';
 
+import 'support/call_fakes.dart';
 import 'support/fakes.dart';
 
 Future<void> launch(
@@ -12,12 +15,15 @@ Future<void> launch(
   MemorySessionStore? store,
   FakeGoogleAuth? google,
   FakeConnector? connector,
+  FakeEngine? engine,
 }) async {
   await tester.pumpWidget(GoThermoApp(
     store: store ?? MemorySessionStore(),
     httpClient: server.client,
     connector: connector ?? FakeConnector(),
     googleAuth: google ?? FakeGoogleAuth(),
+    callEngine: engine ?? FakeEngine(),
+    callTones: SilentTones(),
   ));
   await tester.pumpAndSettle();
 }
@@ -36,6 +42,8 @@ Future<void> signIn(WidgetTester tester) async {
 }
 
 void main() {
+  tearDown(() => Palette.apply(midnightColors, accentChoices.first));
+
   testWidgets('shows the sign-in screen when nobody is signed in', (tester) async {
     await launch(tester, server: FakeServer());
     expect(find.text('Welcome back'), findsOneWidget);
@@ -124,6 +132,99 @@ void main() {
     await tester.pumpAndSettle();
     expect(server.lastSentText, 'hi there');
     expect(find.text('hi there'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('the Appearance screen switches the theme and remembers it', (tester) async {
+    final store = MemorySessionStore(token: 'saved');
+    await launch(tester, server: FakeServer(), store: store);
+
+    await tester.tap(find.byKey(const Key('profile-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('appearance')));
+    await tester.pumpAndSettle();
+    expect(find.text('Appearance'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('theme-light')));
+    await tester.pumpAndSettle();
+    expect(Palette.brightness, Brightness.light);
+    expect(store.prefs['theme.mode'], 'light');
+
+    await tester.tap(find.byKey(const Key('accent-2')));
+    await tester.pumpAndSettle();
+    expect(Palette.accent, accentChoices[2]);
+    await close(tester);
+  });
+
+  testWidgets('an incoming call opens the call screen; answering and hanging up work', (tester) async {
+    final connector = FakeConnector();
+    final engine = FakeEngine();
+    await launch(tester, server: FakeServer(), store: MemorySessionStore(token: 'saved'), connector: connector, engine: engine);
+
+    connector.current.push('call_offer', {
+      'to': 'ann',
+      'from': 'bob',
+      'sdp': {'type': 'offer', 'sdp': 'theirs'},
+    });
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Incoming voice call'), findsOneWidget);
+    expect(find.byKey(const Key('call-accept')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('call-accept')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(connector.current.sent.any((f) => f['type'] == 'call_answer'), isTrue);
+    expect(find.text('Connecting...'), findsOneWidget);
+
+    engine.peer.states.add(PeerState.connected);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const Key('call-end')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('call-end')));
+    await tester.pumpAndSettle();
+    expect(connector.current.sent.any((f) => f['type'] == 'call_end'), isTrue);
+    expect(find.byKey(const Key('call-end')), findsNothing);
+    expect(find.text('general'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('declining an incoming call sends a reject', (tester) async {
+    final connector = FakeConnector();
+    await launch(tester, server: FakeServer(), store: MemorySessionStore(token: 'saved'), connector: connector);
+    connector.current.push('call_offer', {
+      'to': 'ann',
+      'from': 'bob',
+      'sdp': {'type': 'offer', 'sdp': 'theirs'},
+    });
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const Key('call-decline')));
+    await tester.pumpAndSettle();
+    expect(connector.current.sent.any((f) => f['type'] == 'call_reject'), isTrue);
+    expect(find.byKey(const Key('call-accept')), findsNothing);
+    await close(tester);
+  });
+
+  testWidgets('the call button in a direct message starts a call', (tester) async {
+    final connector = FakeConnector();
+    final engine = FakeEngine();
+    await launch(tester, server: FakeServer(), store: MemorySessionStore(token: 'saved'), connector: connector, engine: engine);
+
+    await tester.tap(find.text('Direct'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('call-voice')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final offer = connector.current.sent.lastWhere((f) => f['type'] == 'call_offer');
+    expect((offer['payload'] as Map)['to'], 'bob');
+    expect(find.text('Calling...'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('call-end')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-end')), findsNothing);
     await close(tester);
   });
 }

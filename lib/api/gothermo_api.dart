@@ -83,14 +83,22 @@ class GoThermoApi {
   }
 
   /// [beforeId] empty = the newest page, otherwise the page right before that message.
-  Future<List<Message>> messagesPage(
+  /// The server answers `{messages: [...], hasMore: bool}`; a bare list is accepted too.
+  Future<({List<Message> messages, bool? hasMore})> messagesPage(
     String token,
     String channel, {
     String beforeId = '',
     int limit = 40,
   }) async {
     final raw = await _rpc.call('GetMessagesPage', [token, channel, beforeId, limit]);
-    return _maps(raw).map(Message.fromJson).toList();
+    if (raw is Map) {
+      final more = raw['hasMore'];
+      return (
+        messages: _maps(raw['messages']).map(Message.fromJson).toList(),
+        hasMore: more is bool ? more : null,
+      );
+    }
+    return (messages: _maps(raw).map(Message.fromJson).toList(), hasMore: null);
   }
 
   /// Returns the id of the new message.
@@ -122,6 +130,21 @@ class GoThermoApi {
 
   Future<void> deleteMessage(String token, String messageId, String channel, String username) async {
     await _rpc.call('DeleteMessage', [token, messageId, channel, username]);
+  }
+
+  /// STUN / TURN servers for calls (the same list the web app uses).
+  Future<List<Map<String, dynamic>>> iceServers(String token) async {
+    final raw = await _rpc.call('GetIceServers', [token]);
+    if (raw is! String) return const [];
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const [];
+    return decoded.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// Writes the "call" line into a conversation. [status] is `completed`,
+  /// `declined` or `cancelled`.
+  Future<void> logCall(String token, String channel, String initiator, String status, int seconds) async {
+    await _rpc.call('LogCall', [token, channel, initiator, status, seconds]);
   }
 
   Future<void> markRead(String token, String username, String channel) async {

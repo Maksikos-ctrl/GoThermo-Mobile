@@ -70,5 +70,7 @@
 	<string>Choose pictures to send and to use as your profile picture.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo to send in a chat.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone is used for voice and video calls.</string>
 </dict>
 </plist>

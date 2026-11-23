@@ -43,7 +43,7 @@ class MessageRow extends StatelessWidget {
         onLongPress: sending || failed ? null : onLongPress,
         child: Container(
           decoration: _mentionsMe
-              ? const BoxDecoration(border: Border(left: BorderSide(color: Palette.accent, width: 3)))
+              ? BoxDecoration(border: Border(left: BorderSide(color: Palette.accent, width: 3)))
               : null,
           padding: EdgeInsets.fromLTRB(12, showHeader ? 8 : 1, 12, 1),
           child: Row(
@@ -92,10 +92,10 @@ class MessageRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(clock(message.timestamp), style: const TextStyle(color: Palette.textMuted, fontSize: 11.5)),
+          Text(clock(message.timestamp), style: TextStyle(color: Palette.textMuted, fontSize: 11.5)),
           if (message.isEdited) ...[
             const SizedBox(width: 6),
-            const Text('edited', style: TextStyle(color: Palette.textMuted, fontSize: 11.5)),
+            Text('edited', style: TextStyle(color: Palette.textMuted, fontSize: 11.5)),
           ],
         ],
       ),
@@ -126,7 +126,7 @@ class MessageRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: Palette.bgSecondary,
           borderRadius: BorderRadius.circular(10),
-          border: const Border(left: BorderSide(color: Palette.accent, width: 3)),
+          border: Border(left: BorderSide(color: Palette.accent, width: 3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,9 +172,9 @@ class MessageRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 15, color: Palette.danger),
+          Icon(Icons.error_outline, size: 15, color: Palette.danger),
           const SizedBox(width: 4),
-          const Text('Not sent', style: TextStyle(color: Palette.danger, fontSize: 12)),
+          Text('Not sent', style: TextStyle(color: Palette.danger, fontSize: 12)),
           TextButton(
             style: TextButton.styleFrom(
               minimumSize: const Size(0, 28),
@@ -300,9 +300,9 @@ class _CallLine extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: color),
               const SizedBox(width: 6),
-              Text(text, style: const TextStyle(fontSize: 12.5, color: Palette.textMuted)),
+              Text(text, style: TextStyle(fontSize: 12.5, color: Palette.textMuted)),
               const SizedBox(width: 8),
-              Text(clock(message.timestamp), style: const TextStyle(fontSize: 11, color: Palette.textMuted)),
+              Text(clock(message.timestamp), style: TextStyle(fontSize: 11, color: Palette.textMuted)),
             ],
           ),
         ),
@@ -324,7 +324,7 @@ class DayChip extends StatelessWidget {
       child: Row(
         children: [
           const Expanded(child: Divider(indent: 16, endIndent: 10)),
-          Text(label, style: const TextStyle(color: Palette.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(color: Palette.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
           const Expanded(child: Divider(indent: 10, endIndent: 16)),
         ],
       ),

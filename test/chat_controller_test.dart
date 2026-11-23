@@ -305,6 +305,53 @@ void main() {
     });
   });
 
+  group('typing', () {
+    test('shows who is typing, ignores me, and clears when their message arrives', () async {
+      final (c, _, conn) = await started();
+      conn.current.push('typing', {'channel': 'general', 'username': 'bob'});
+      conn.current.push('typing', {'channel': 'general', 'username': 'ann'});
+      await settle();
+      expect(c.typingIn('general'), ['bob']);
+      expect(c.typingIn('random'), isEmpty);
+
+      conn.current.push('channel_message', {
+        'channel': 'general',
+        'message': {'id': 'm9', 'user': 'bob', 'text': 'hi', 'channel': 'general', 'timestamp': '2026-11-12T12:00:00Z'},
+      });
+      await settle();
+      expect(c.typingIn('general'), isEmpty);
+      c.dispose();
+    });
+
+    test('our own typing is announced once per gap', () async {
+      final (c, _, conn) = await started();
+      c.announceTyping('general');
+      c.announceTyping('general');
+      final frames = conn.current.sent.where((f) => f['type'] == 'typing').toList();
+      expect(frames.length, 1);
+      expect(frames.first['payload'], 'general');
+      c.dispose();
+    });
+  });
+
+  group('call signals', () {
+    test('call events from the server are passed on, and a signal can be sent', () async {
+      final (c, _, conn) = await started();
+      final got = <String>[];
+      c.signals.listen((e) => got.add(e.type));
+      conn.current.push('call_offer', {'to': 'ann', 'from': 'bob', 'sdp': {'type': 'offer', 'sdp': 'x'}});
+      conn.current.push('call_end', {'to': 'ann', 'from': 'bob'});
+      await settle();
+      expect(got, ['call_offer', 'call_end']);
+
+      c.sendSignal('call_reject', {'to': 'bob', 'from': 'ann'});
+      final sent = conn.current.sent.last;
+      expect(sent['type'], 'call_reject');
+      expect((sent['payload'] as Map)['to'], 'bob');
+      c.dispose();
+    });
+  });
+
   group('connection', () {
     test('reconnects after a drop and catches up', () async {
       final (c, server, conn) = await started();

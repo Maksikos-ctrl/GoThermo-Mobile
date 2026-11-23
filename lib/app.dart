@@ -4,16 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'api/socket.dart';
+import 'calls/call_types.dart';
 import 'screens/admin_screen.dart';
+import 'screens/call_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'state/app_controller.dart';
+import 'state/call_controller.dart';
 import 'state/chat_controller.dart';
 import 'state/google_auth.dart';
 import 'state/session_store.dart';
+import 'state/theme_settings.dart';
 import 'theme.dart';
 import 'widgets/avatar.dart';
+import 'widgets/toast.dart';
 
 class GoThermoApp extends StatefulWidget {
   const GoThermoApp({
@@ -22,12 +27,16 @@ class GoThermoApp extends StatefulWidget {
     this.httpClient,
     this.connector,
     this.googleAuth,
+    this.callEngine,
+    this.callTones,
   });
 
   final SessionStore store;
   final http.Client? httpClient;
   final SocketConnector? connector;
   final GoogleAuth? googleAuth;
+  final CallEngine? callEngine;
+  final CallTones? callTones;
 
   @override
   State<GoThermoApp> createState() => _GoThermoAppState();
@@ -39,6 +48,8 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
     httpClient: widget.httpClient,
     connector: widget.connector,
     google: widget.googleAuth,
+    callEngine: widget.callEngine,
+    callTones: widget.callTones,
   );
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
@@ -46,12 +57,15 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _applyPalette();
+    _controller.theme.addListener(_themeChanged);
     _controller.start();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _controller.theme.removeListener(_themeChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -59,6 +73,32 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) _controller.resumed();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (_controller.theme.mode == ThemeSettings.systemMode) _themeChanged();
+  }
+
+  /// Puts the chosen colours into [Palette] (the screens read them from there).
+  void _applyPalette() {
+    final settings = _controller.theme;
+    final system = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    Palette.apply(resolveColors(settings.mode, system), accentChoices[settings.accent]);
+  }
+
+  /// Colours changed: update them and rebuild everything on screen, including
+  /// screens that are already open under the current one.
+  void _themeChanged() {
+    if (!mounted) return;
+    _applyPalette();
+    setState(() {});
+    void mark(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(mark);
+    }
+
+    (context as Element).visitChildren(mark);
   }
 
   Widget _home() {
@@ -84,11 +124,22 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       navigatorKey: _navigator,
-      builder: (context, child) => NoticeHost(
-        app: _controller,
-        navigator: _navigator,
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final scale = _controller.theme.textScale;
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: scale == 1.0 ? media : media.copyWith(textScaler: TextScaler.linear(scale)),
+          child: CallHost(
+            app: _controller,
+            navigator: _navigator,
+            child: NoticeHost(
+              app: _controller,
+              navigator: _navigator,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        );
+      },
       home: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => AnimatedSwitcher(
@@ -220,7 +271,7 @@ class _NoticeHostState extends State<NoticeHost> {
                                         n.message.isFile ? 'Sent a file' : n.message.text.replaceAll('\n', ' '),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Palette.textMuted, fontSize: 13),
+                                        style: TextStyle(color: Palette.textMuted, fontSize: 13),
                                       ),
                                     ],
                                   ),
@@ -237,4 +288,72 @@ class _NoticeHostState extends State<NoticeHost> {
       ],
     );
   }
+}
+
+/// Opens the call screen when a call starts or comes in, and shows what went
+/// wrong when one fails.
+class CallHost extends StatefulWidget {
+  const CallHost({super.key, required this.app, required this.navigator, required this.child});
+
+  final AppController app;
+  final GlobalKey<NavigatorState> navigator;
+  final Widget child;
+
+  @override
+  State<CallHost> createState() => _CallHostState();
+}
+
+class _CallHostState extends State<CallHost> {
+  CallController? _watching;
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.app.addListener(_rewire);
+    _rewire();
+  }
+
+  @override
+  void dispose() {
+    widget.app.removeListener(_rewire);
+    _watching?.removeListener(_onCall);
+    super.dispose();
+  }
+
+  void _rewire() {
+    final call = widget.app.call;
+    if (identical(call, _watching)) return;
+    _watching?.removeListener(_onCall);
+    _watching = call;
+    call?.addListener(_onCall);
+  }
+
+  void _onCall() {
+    final call = _watching;
+    final chat = widget.app.chat;
+    if (call == null || chat == null) return;
+    if (call.phase != CallPhase.idle && !_open) {
+      _open = true;
+      widget.navigator.currentState
+          ?.push(
+            PageRouteBuilder<void>(
+              opaque: true,
+              transitionDuration: const Duration(milliseconds: 250),
+              pageBuilder: (_, __, ___) => CallScreen(call: call, chat: chat),
+              transitionsBuilder: (_, animation, __, page) => FadeTransition(opacity: animation, child: page),
+            ),
+          )
+          .whenComplete(() => _open = false);
+    }
+    final message = call.error;
+    if (message != null) {
+      call.clearError();
+      final context = widget.navigator.currentContext;
+      if (context != null) showToast(context, message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

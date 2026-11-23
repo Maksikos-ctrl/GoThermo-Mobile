@@ -76,7 +76,7 @@ class _NewMessageState extends State<_NewMessage> {
             ),
             Expanded(
               child: people.isEmpty
-                  ? const Center(child: Text('Nobody found', style: TextStyle(color: Palette.textMuted)))
+                  ? Center(child: Text('Nobody found', style: TextStyle(color: Palette.textMuted)))
                   : ListView.builder(
                       itemCount: people.length,
                       itemBuilder: (context, i) {

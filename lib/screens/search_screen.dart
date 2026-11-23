@@ -99,14 +99,14 @@ class _SearchScreenState extends State<SearchScreen> {
             : _error != null
                 ? Center(key: const ValueKey('error'), child: Text(_error!))
                 : _query.isEmpty
-                    ? const Center(
+                    ? Center(
                         key: ValueKey('hint'),
                         child: Text('Type to search all your channels', style: TextStyle(color: Palette.textMuted)),
                       )
                     : _results.isEmpty
                         ? Center(
                             key: const ValueKey('none'),
-                            child: Text('Nothing found for "$_query"', style: const TextStyle(color: Palette.textMuted)),
+                            child: Text('Nothing found for "$_query"', style: TextStyle(color: Palette.textMuted)),
                           )
                         : ListView.builder(
                             key: const ValueKey('results'),
@@ -130,7 +130,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   ),
                                   trailing: Text(
                                     shortStamp(m.timestamp, DateTime.now()),
-                                    style: const TextStyle(color: Palette.textMuted, fontSize: 11.5),
+                                    style: TextStyle(color: Palette.textMuted, fontSize: 11.5),
                                   ),
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute<void>(

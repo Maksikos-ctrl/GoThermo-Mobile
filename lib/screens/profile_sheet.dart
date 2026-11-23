@@ -5,7 +5,9 @@ import '../state/app_controller.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/motion.dart';
 import '../widgets/toast.dart';
+import 'appearance_screen.dart';
 
 /// Your picture, status, the server and sign out.
 Future<void> showProfileSheet(BuildContext context, AppController app, ChatController chat) {
@@ -95,7 +97,7 @@ class _ProfileState extends State<_Profile> {
                 ),
                 const SizedBox(height: 12),
                 Text(me, style: Theme.of(context).textTheme.titleLarge),
-                if (email.isNotEmpty) Text(email, style: const TextStyle(color: Palette.textMuted)),
+                if (email.isNotEmpty) Text(email, style: TextStyle(color: Palette.textMuted)),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -121,14 +123,25 @@ class _ProfileState extends State<_Profile> {
                     onTap: _busy ? null : _removePicture,
                   ),
                 ListTile(
+                  key: const Key('appearance'),
+                  leading: const Icon(Icons.palette_outlined),
+                  title: const Text('Appearance'),
+                  subtitle: const Text('Theme, accent colour, text size'),
+                  onTap: () {
+                    final navigator = Navigator.of(widget.parent);
+                    Navigator.pop(context);
+                    navigator.push(riseRoute<void>(AppearanceScreen(settings: widget.app.theme)));
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.dns_outlined),
                   title: const Text('Server'),
                   subtitle: Text(widget.app.serverUrl.replaceFirst('https://', '')),
                 ),
                 ListTile(
                   key: const Key('sign-out'),
-                  leading: const Icon(Icons.logout, color: Palette.danger),
-                  title: const Text('Sign out', style: TextStyle(color: Palette.danger)),
+                  leading: Icon(Icons.logout, color: Palette.danger),
+                  title: Text('Sign out', style: TextStyle(color: Palette.danger)),
                   onTap: () {
                     Navigator.pop(context);
                     widget.app.signOut();

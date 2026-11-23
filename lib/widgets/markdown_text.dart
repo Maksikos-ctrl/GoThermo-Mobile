@@ -71,7 +71,7 @@ class _MarkdownTextState extends State<MarkdownText> {
         case SpanKind.code:
           inline.add(TextSpan(
             text: s.text,
-            style: const TextStyle(fontFamily: 'monospace', backgroundColor: Palette.bgTertiary, fontSize: 13.5),
+            style: TextStyle(fontFamily: 'monospace', backgroundColor: Palette.bgTertiary, fontSize: 13.5),
           ));
         case SpanKind.link:
           final tap = TapGestureRecognizer()..onTap = () => _open(s.text);
@@ -104,7 +104,7 @@ class _MarkdownTextState extends State<MarkdownText> {
             ),
             child: Text(
               s.text.trim(),
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Palette.textPrimary),
+              style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: Palette.textPrimary),
             ),
           ));
       }

@@ -223,9 +223,9 @@ class _ChannelList extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     direct ? 'No direct messages yet' : (chat.error ?? 'No channels yet'),
-                    style: const TextStyle(color: Palette.textMuted),
+                    style: TextStyle(color: Palette.textMuted),
                   ),
-                  if (direct) const Text('Tap "New message" to start one', style: TextStyle(color: Palette.textMuted)),
+                  if (direct) Text('Tap "New message" to start one', style: TextStyle(color: Palette.textMuted)),
                 ],
               ),
             ),

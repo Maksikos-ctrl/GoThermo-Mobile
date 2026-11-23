@@ -48,7 +48,7 @@ class _ChatImageState extends State<ChatImage> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Palette.border),
               ),
-              child: const Column(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.refresh, color: Palette.textMuted),
@@ -111,7 +111,7 @@ class GifView extends StatelessWidget {
                 height: 80,
                 alignment: Alignment.center,
                 color: Palette.bgTertiary,
-                child: const Text('GIF could not be loaded', style: TextStyle(color: Palette.textMuted)),
+                child: Text('GIF could not be loaded', style: TextStyle(color: Palette.textMuted)),
               ),
             ),
           ),
@@ -206,14 +206,14 @@ class _FileChipState extends State<FileChip> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(m.fileName.isEmpty ? 'File' : m.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(fileSize(m.fileSize), style: const TextStyle(color: Palette.textMuted, fontSize: 12)),
+                  Text(fileSize(m.fileSize), style: TextStyle(color: Palette.textMuted, fontSize: 12)),
                 ],
               ),
             ),
             const SizedBox(width: 10),
             _busy
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.ios_share, size: 20, color: Palette.textMuted),
+                : Icon(Icons.ios_share, size: 20, color: Palette.textMuted),
           ],
         ),
       ),

@@ -53,8 +53,8 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
             ),
           if (mine)
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Palette.danger),
-              title: const Text('Delete', style: TextStyle(color: Palette.danger)),
+              leading: Icon(Icons.delete_outline, color: Palette.danger),
+              title: Text('Delete', style: TextStyle(color: Palette.danger)),
               onTap: () => Navigator.pop(sheetContext, const _Action.delete()),
             ),
         ],
@@ -90,7 +90,7 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete', style: TextStyle(color: Palette.danger)),
+              child: Text('Delete', style: TextStyle(color: Palette.danger)),
             ),
           ],
         ),

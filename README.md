@@ -11,9 +11,11 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - Live chat over WebSocket (auto-reconnect, polling fallback), optimistic sending with retry
 - Markdown, emoji picker, reactions, edit / delete, GIFs (when the server has GIPHY), photos, camera and files
 - Search across channels, profile picture and status, in-app banners for new messages
-- Midnight theme and animations matching the web and desktop apps
+- Voice and video calls (1:1, WebRTC, works with the web and desktop apps)
+- Themes: Midnight, Graphite, AMOLED, Light, System; 6 accent colours; text size (Profile → Appearance)
+- Animations matching the web and desktop apps
 
-Not included yet: calls (WebRTC), push notifications when the app is closed (needs Firebase / APNs and device-token storage on the server), creating channels.
+Not included yet: incoming calls while the app is closed (needs push / CallKit and device-token storage on the server), group calls, sending screen share, creating channels.
 
 ## Run it
 
