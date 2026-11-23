@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/message.dart';
+import 'decisions_screen.dart';
+import 'pinned_screen.dart';
+import 'thread_screen.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
 import '../util/mime.dart';
@@ -144,7 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
           appBar: AppBar(
             titleSpacing: 0,
             title: _title(),
-            actions: _callButtons(),
+            actions: [..._callButtons(), _channelMenu()],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(2),
               child: AnimatedOpacity(
@@ -225,6 +228,32 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Voice and video call buttons, for a conversation with exactly one other person.
+  Widget _channelMenu() {
+    final pins = chat.pinsOf(channel).length;
+    return PopupMenuButton<String>(
+      key: const Key('channel-menu'),
+      tooltip: 'More',
+      onSelected: (v) {
+        final page = v == 'pins'
+            ? PinnedScreen(chat: chat, channel: channel)
+            : DecisionsScreen(chat: chat, channel: channel);
+        Navigator.of(context).push(riseRoute<void>(page));
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          key: const Key('menu-pins'),
+          value: 'pins',
+          child: Text(pins == 0 ? 'Pinned messages' : 'Pinned messages ($pins)'),
+        ),
+        const PopupMenuItem<String>(
+          key: Key('menu-decisions'),
+          value: 'decisions',
+          child: Text('Decisions & tasks'),
+        ),
+      ],
+    );
+  }
+
   List<Widget> _callButtons() {
     final ch = chat.channelNamed(channel);
     final calls = chat.calls;
@@ -337,6 +366,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 chat: chat,
                 showHeader: row.header,
                 onLongPress: () => showMessageActions(context, chat, m),
+                onOpenThread: () => Navigator.of(context).push(riseRoute<void>(ThreadScreen(chat: chat, parent: m))),
               ),
             );
           },

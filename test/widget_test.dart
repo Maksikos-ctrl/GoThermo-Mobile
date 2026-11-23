@@ -227,4 +227,41 @@ void main() {
     expect(find.byKey(const Key('call-end')), findsNothing);
     await close(tester);
   });
+
+  testWidgets('a message can be answered in a thread', (tester) async {
+    final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'hello from bob')];
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('hello from bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('action-thread')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('thread-field')), 'my reply');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('thread-send')));
+    await tester.pumpAndSettle();
+    expect(server.replies['1']!.single['text'], 'my reply');
+    expect(find.text('my reply'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('a pinned message shows up in the pinned list', (tester) async {
+    final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'hello from bob')];
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('hello from bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('action-pin')));
+    await tester.pumpAndSettle();
+    expect(server.pinned, contains('1'));
+
+    await tester.tap(find.byKey(const Key('channel-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('menu-pins')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pinned by bob'), findsOneWidget);
+    await close(tester);
+  });
 }

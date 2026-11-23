@@ -24,6 +24,9 @@ class Message {
     this.callDuration = 0,
     this.sendState = SendState.sent,
     this.clientId = '',
+    this.replyCount = 0,
+    this.replyUsers = const [],
+    this.threadId = '',
   });
 
   final String id;
@@ -49,6 +52,13 @@ class Message {
   /// Set on messages this phone sent: stays the same when the placeholder is
   /// swapped for the server's copy, so the screen can tell it is the same bubble.
   final String clientId;
+
+  /// How many replies the message has in its thread, and who wrote them.
+  final int replyCount;
+  final List<String> replyUsers;
+
+  /// Set on a reply: the message it answers.
+  final String threadId;
 
   /// Identifies the bubble on screen across the placeholder -> real swap.
   String get stableKey => clientId.isNotEmpty ? clientId : id;
@@ -84,6 +94,9 @@ class Message {
       isCall: flag(j['isCall']),
       callStatus: str(j['callStatus']),
       callDuration: whole(j['callDuration']),
+      replyCount: whole(j['replyCount']),
+      replyUsers: j['replyUsers'] is List ? (j['replyUsers'] as List).whereType<String>().toList() : const [],
+      threadId: str(j['threadId']),
     );
   }
 
@@ -105,6 +118,9 @@ class Message {
         'isCall': isCall,
         'callStatus': callStatus,
         'callDuration': callDuration,
+        'replyCount': replyCount,
+        'replyUsers': replyUsers,
+        'threadId': threadId,
       };
 
   Message copyWith({
@@ -114,6 +130,7 @@ class Message {
     bool? isEdited,
     SendState? sendState,
     String? clientId,
+    int? replyCount,
   }) =>
       Message(
         id: id ?? this.id,
@@ -134,5 +151,8 @@ class Message {
         callDuration: callDuration,
         sendState: sendState ?? this.sendState,
         clientId: clientId ?? this.clientId,
+        replyCount: replyCount ?? this.replyCount,
+        replyUsers: replyUsers,
+        threadId: threadId,
       );
 }

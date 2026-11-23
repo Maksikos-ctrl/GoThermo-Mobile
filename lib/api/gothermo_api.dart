@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../models/channel.dart';
+import '../models/extras.dart';
 import '../models/gif.dart';
 import '../models/message.dart';
 import '../models/user.dart';
@@ -99,6 +100,52 @@ class GoThermoApi {
       );
     }
     return (messages: _maps(raw).map(Message.fromJson).toList(), hasMore: null);
+  }
+
+  // ---- pins, threads, decisions -----------------------------------------------------
+
+  Future<void> pinMessage(String token, String channel, String messageId, String me) async {
+    await _rpc.call('PinMessage', [token, channel, messageId, me]);
+  }
+
+  Future<void> unpinMessage(String token, String channel, String messageId, String me) async {
+    await _rpc.call('UnpinMessage', [token, channel, messageId, me]);
+  }
+
+  Future<List<Pin>> pins(String token, String channel) async {
+    final raw = await _rpc.call('GetPinnedMessages', [token, channel]);
+    return _maps(raw).map(Pin.fromJson).toList();
+  }
+
+  Future<ThreadData> thread(String token, String channel, String parentId) async {
+    final raw = await _rpc.call('GetThread', [token, channel, parentId]);
+    return ThreadData.fromJson(_map(raw));
+  }
+
+  Future<Message> sendReply(String token, String me, String channel, String parentId, String text) async {
+    final raw = await _rpc.call('SendReply', [token, me, channel, parentId, text]);
+    return Message.fromJson(_map(raw));
+  }
+
+  Future<void> deleteReply(String token, String channel, String parentId, String replyId, String me) async {
+    await _rpc.call('DeleteReply', [token, channel, parentId, replyId, me]);
+  }
+
+  Future<List<Decision>> decisions(String token, String channel) async {
+    final raw = await _rpc.call('GetDecisions', [token, channel]);
+    return _maps(raw).map(Decision.fromJson).toList();
+  }
+
+  Future<void> markDecision(String token, String me, String channel, String messageId, String kind) async {
+    await _rpc.call('MarkDecision', [token, me, channel, messageId, kind]);
+  }
+
+  Future<void> setDecisionDone(String token, String me, String channel, String messageId, bool done) async {
+    await _rpc.call('SetDecisionDone', [token, me, channel, messageId, done]);
+  }
+
+  Future<void> removeDecision(String token, String me, String channel, String messageId) async {
+    await _rpc.call('RemoveDecision', [token, me, channel, messageId]);
   }
 
   /// Returns the id of the new message.

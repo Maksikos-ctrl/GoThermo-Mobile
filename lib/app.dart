@@ -16,6 +16,7 @@ import 'state/call_controller.dart';
 import 'state/chat_controller.dart';
 import 'state/google_auth.dart';
 import 'state/session_store.dart';
+import 'notifications/notifier.dart';
 import 'state/theme_settings.dart';
 import 'theme.dart';
 import 'widgets/avatar.dart';
@@ -31,6 +32,7 @@ class GoThermoApp extends StatefulWidget {
     this.callEngine,
     this.callTones,
     this.cacheOpener,
+    this.notifier,
   });
 
   final SessionStore store;
@@ -42,6 +44,9 @@ class GoThermoApp extends StatefulWidget {
   /// Opens the offline copy of one account's chats; null keeps nothing on the phone.
   final Future<LocalCache> Function(String owner)? cacheOpener;
   final CallTones? callTones;
+
+  /// Shows phone notifications; null keeps them off.
+  final Notifier? notifier;
 
   @override
   State<GoThermoApp> createState() => _GoThermoAppState();
@@ -56,6 +61,7 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
     callEngine: widget.callEngine,
     callTones: widget.callTones,
     cacheOpener: widget.cacheOpener,
+    notifier: widget.notifier,
   );
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
@@ -66,6 +72,7 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
     _applyPalette();
     _controller.theme.addListener(_themeChanged);
     _controller.start();
+    unawaited(_controller.setUpNotifications());
   }
 
   @override
@@ -78,7 +85,11 @@ class _GoThermoAppState extends State<GoThermoApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _controller.resumed();
+    if (state == AppLifecycleState.resumed) {
+      _controller.resumed();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _controller.paused();
+    }
   }
 
   @override
@@ -172,6 +183,7 @@ class NoticeHost extends StatefulWidget {
 
 class _NoticeHostState extends State<NoticeHost> {
   StreamSubscription<Notice>? _sub;
+  StreamSubscription<String>? _opens;
   ChatController? _watching;
   Notice? _shown;
   Timer? _hide;
@@ -180,12 +192,14 @@ class _NoticeHostState extends State<NoticeHost> {
   void initState() {
     super.initState();
     widget.app.addListener(_rewire);
+    _opens = widget.app.opens.listen(_openChannel);
     _rewire();
   }
 
   @override
   void dispose() {
     widget.app.removeListener(_rewire);
+    _opens?.cancel();
     _sub?.cancel();
     _hide?.cancel();
     super.dispose();
@@ -213,11 +227,15 @@ class _NoticeHostState extends State<NoticeHost> {
   }
 
   void _open(Notice n) {
-    final chat = _watching;
     setState(() => _shown = null);
+    _openChannel(n.message.channel);
+  }
+
+  void _openChannel(String channel) {
+    final chat = _watching;
     if (chat == null) return;
     widget.navigator.currentState?.push(
-      MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat, channel: n.message.channel)),
+      MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat, channel: channel)),
     );
   }
 

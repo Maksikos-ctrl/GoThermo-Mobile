@@ -199,4 +199,76 @@ void main() {
       }
     });
   });
+
+  group('writing with no connection', () {
+    test('the message waits, and goes out when the server is back', () async {
+      final server = FakeServer();
+      final c = build(server, FakeConnector(), MemoryCache());
+      await c.start();
+      await settle();
+      server.down = true;
+      await c.send('general', 'first');
+      await c.send('general', 'second');
+      expect(c.error, isNull);
+      expect(c.messagesOf('general').every((m) => m.sendState == SendState.sending), isTrue);
+      expect(c.waitingCount, 2);
+
+      server.down = false;
+      await c.flushOutbox();
+      await settle();
+      final sent = c.messagesOf('general');
+      expect(sent.map((m) => m.text).toList(), ['first', 'second']);
+      expect(sent.every((m) => m.sendState == SendState.sent), isTrue);
+      expect(c.waitingCount, 0);
+      c.dispose();
+    });
+
+    test('still offline: flushing stops at the first message and keeps the order', () async {
+      final server = FakeServer();
+      final c = build(server, FakeConnector(), MemoryCache());
+      await c.start();
+      await settle();
+      server.down = true;
+      await c.send('general', 'a');
+      await c.send('general', 'b');
+      final before = server.calls.where((x) => x == 'SendMessage').length;
+      await c.flushOutbox();
+      expect(c.waitingCount, 2);
+      expect(server.calls.where((x) => x == 'SendMessage').length, before + 1);
+      c.dispose();
+    });
+
+    test('a message written offline survives closing the app', () async {
+      final cache = MemoryCache();
+      final server = FakeServer();
+      final first = build(server, FakeConnector(), cache);
+      await first.start();
+      await settle();
+      server.down = true;
+      await first.send('general', 'for later');
+      first.dispose();
+
+      final back = FakeServer();
+      final c = build(back, FakeConnector(), cache);
+      await c.start();
+      await settle();
+      await settle(50);
+      final m = c.messagesOf('general').single;
+      expect(m.text, 'for later');
+      expect(m.sendState, SendState.sent);
+      expect(back.lastSentText, 'for later');
+      c.dispose();
+    });
+
+    test('an answer from the server that says no is a failure, not a wait', () async {
+      final server = FakeServer()..sendError = 'slow down';
+      final c = build(server, FakeConnector(), MemoryCache());
+      await c.start();
+      await settle();
+      await c.send('general', 'hi');
+      expect(c.messagesOf('general').single.sendState, SendState.failed);
+      expect(c.waitingCount, 0);
+      c.dispose();
+    });
+  });
 }

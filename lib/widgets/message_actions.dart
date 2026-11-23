@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/message.dart';
+import '../screens/thread_screen.dart';
+import 'motion.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
 import '../util/emoji_data.dart';
@@ -39,6 +41,27 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
             ),
           ),
           const Divider(height: 1),
+          if (!m.isCall && m.threadId.isEmpty)
+            ListTile(
+              key: const Key('action-thread'),
+              leading: const Icon(Icons.forum_outlined),
+              title: const Text('Reply in thread'),
+              onTap: () => Navigator.pop(sheetContext, const _Action.thread()),
+            ),
+          if (!m.isCall && m.threadId.isEmpty)
+            ListTile(
+              key: const Key('action-pin'),
+              leading: Icon(chat.isPinned(m.channel, m.id) ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(chat.isPinned(m.channel, m.id) ? 'Unpin message' : 'Pin message'),
+              onTap: () => Navigator.pop(sheetContext, const _Action.pin()),
+            ),
+          if (!m.isCall && m.threadId.isEmpty)
+            ListTile(
+              key: const Key('action-decision'),
+              leading: const Icon(Icons.checklist_outlined),
+              title: const Text('Add to decisions'),
+              onTap: () => Navigator.pop(sheetContext, const _Action.decision()),
+            ),
           if (m.text.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.copy_outlined),
@@ -72,6 +95,39 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
       if (emoji == null) return;
       final moreError = await chat.react(m, emoji);
       if (context.mounted) toastIfError(context, moreError);
+    case _Kind.thread:
+      await Navigator.of(context).push(riseRoute<void>(ThreadScreen(chat: chat, parent: m)));
+    case _Kind.pin:
+      final pinError = chat.isPinned(m.channel, m.id) ? await chat.unpin(m) : await chat.pin(m);
+      if (context.mounted) toastIfError(context, pinError);
+    case _Kind.decision:
+      final kind = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Add to decisions'),
+          children: [
+            SimpleDialogOption(
+              key: const Key('kind-decision'),
+              onPressed: () => Navigator.pop(dialogContext, 'decision'),
+              child: const Text('A decision'),
+            ),
+            SimpleDialogOption(
+              key: const Key('kind-task'),
+              onPressed: () => Navigator.pop(dialogContext, 'task'),
+              child: const Text('A task'),
+            ),
+          ],
+        ),
+      );
+      if (kind == null) return;
+      final markError = await chat.markDecision(m, kind);
+      if (context.mounted) {
+        if (markError == null) {
+          showToast(context, kind == 'task' ? 'Added as a task' : 'Added as a decision');
+        } else {
+          toastIfError(context, markError);
+        }
+      }
     case _Kind.copy:
       await Clipboard.setData(ClipboardData(text: m.text));
       if (context.mounted) showToast(context, 'Copied');
@@ -123,7 +179,7 @@ Future<String?> _askText(BuildContext context, String title, String initial) {
   );
 }
 
-enum _Kind { react, more, copy, edit, delete }
+enum _Kind { react, more, copy, edit, delete, thread, pin, decision }
 
 class _Action {
   const _Action._(this.kind, this.emoji);
@@ -133,6 +189,9 @@ class _Action {
   const _Action.copy() : this._(_Kind.copy, '');
   const _Action.edit() : this._(_Kind.edit, '');
   const _Action.delete() : this._(_Kind.delete, '');
+  const _Action.thread() : this._(_Kind.thread, '');
+  const _Action.pin() : this._(_Kind.pin, '');
+  const _Action.decision() : this._(_Kind.decision, '');
 
   final _Kind kind;
   final String emoji;

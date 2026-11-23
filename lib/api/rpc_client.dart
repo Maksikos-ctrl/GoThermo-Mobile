@@ -4,8 +4,12 @@ import 'package:http/http.dart' as http;
 
 /// What the server (or the network) said went wrong, in words for a person.
 class RpcException implements Exception {
-  RpcException(this.message);
+  RpcException(this.message, {this.unreachable = false});
   final String message;
+
+  /// True when the server could not be reached at all (no network), as
+  /// opposed to the server answering with an error.
+  final bool unreachable;
 
   @override
   String toString() => message;
@@ -44,7 +48,7 @@ class RpcClient {
           )
           .timeout(const Duration(seconds: 20));
     } on Exception {
-      throw RpcException('Cannot reach the server at $baseUrl');
+      throw RpcException('Cannot reach the server at $baseUrl', unreachable: true);
     }
 
     Map<String, dynamic> body = const {};

@@ -23,6 +23,7 @@ ANDROID_PERMISSIONS = [
     '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
     '<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>',
     '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>',
+    '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
     '<uses-feature android:name="android.hardware.camera" android:required="false"/>',
     '<uses-feature android:name="android.hardware.microphone" android:required="false"/>',
 ]
@@ -34,6 +35,21 @@ def patch_android(text: str) -> str:
         if f'android:name="{name}"' not in text:
             text = text.replace("<application", line + "\n    <application", 1)
     return re.sub(r'(android:label=")[^"]*(")', r"\1GoThermo\2", text, count=1)
+
+
+def patch_gradle(text: str) -> str:
+    """flutter_local_notifications needs core library desugaring on Android."""
+    if "coreLibraryDesugaring" in text:
+        return text
+    if "compileOptions {" in text:
+        flag = "isCoreLibraryDesugaringEnabled = true" if ".kts" in text[:0] or "compileSdk = " in text else "coreLibraryDesugaringEnabled true"
+        text = text.replace("compileOptions {", "compileOptions {\n        " + flag, 1)
+    dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' if "compileSdk = " in text else "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+    if "dependencies {" in text:
+        text = text.replace("dependencies {", "dependencies {\n    " + dep, 1)
+    else:
+        text += "\ndependencies {\n    " + dep + "\n}\n"
+    return text
 
 
 def add_key(text: str, key: str, value_xml: str) -> str:
@@ -104,6 +120,10 @@ def patch_macos_info(text: str) -> str:
 
 if __name__ == "__main__":
     edit(root / "android/app/src/main/AndroidManifest.xml", patch_android)
+    for name in ("build.gradle.kts", "build.gradle"):
+        if (root / "android/app" / name).exists():
+            edit(root / "android/app" / name, patch_gradle)
+            break
     edit(root / "ios/Runner/Info.plist", patch_ios)
     edit(root / "macos/Runner/DebugProfile.entitlements", patch_macos_entitlements)
     edit(root / "macos/Runner/Release.entitlements", patch_macos_entitlements)

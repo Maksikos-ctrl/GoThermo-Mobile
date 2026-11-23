@@ -10,6 +10,7 @@ import '../api/rpc_client.dart';
 import '../api/socket.dart';
 import '../cache/local_cache.dart';
 import '../models/channel.dart';
+import '../models/extras.dart';
 import '../models/message.dart';
 import '../models/user.dart';
 import '../util/mime.dart';
@@ -19,6 +20,9 @@ import 'call_controller.dart';
 class ChannelFeed {
   final List<Message> messages = [];
   bool loaded = false;
+
+  /// The saved copy of this channel was already put on screen.
+  bool restored = false;
   bool loading = false;
   bool hasMore = true;
 }
@@ -105,6 +109,10 @@ class ChatController extends ChangeNotifier {
 
   /// The channel on screen right now, if any.
   String? active;
+
+  /// False while the app is in the background: nothing counts as "being read",
+  /// so new messages raise notices (and a phone notification).
+  bool foreground = true;
 
   Stream<Notice> get notices => _notices.stream;
 
@@ -242,6 +250,7 @@ class ChatController extends ChangeNotifier {
     _sendFrame('subscribe_channel', channel);
     notifyListeners();
     await _restoreFeed(channel);
+    unawaited(loadPins(channel));
     await loadNewest(channel);
     _markRead(channel);
   }
@@ -323,6 +332,123 @@ class ChatController extends ChangeNotifier {
     if (old == null || !m.timestamp.isBefore(old.timestamp)) lastMessage[channel] = m;
   }
 
+  // ---- pins, threads and decisions ------------------------------------------------------
+
+  Future<String?> _try(Future<void> Function() body) async {
+    try {
+      await body();
+      return null;
+    } on RpcException catch (e) {
+      return e.message;
+    }
+  }
+
+  final Map<String, List<Pin>> _pins = {};
+
+  List<Pin> pinsOf(String channel) => List.unmodifiable(_pins[channel] ?? const <Pin>[]);
+
+  bool isPinned(String channel, String messageId) =>
+      (_pins[channel] ?? const <Pin>[]).any((p) => p.message.id == messageId);
+
+  Future<String?> loadPins(String channel) => _try(() async {
+        _pins[channel] = await api.pins(token, channel);
+        notifyListeners();
+      });
+
+  Future<String?> pin(Message m) => _try(() async {
+        await api.pinMessage(token, m.channel, m.id, me);
+        await loadPins(m.channel);
+      });
+
+  Future<String?> unpin(Message m) => _try(() async {
+        await api.unpinMessage(token, m.channel, m.id, me);
+        await loadPins(m.channel);
+      });
+
+  final Map<String, ThreadData> _threads = {};
+
+  String _threadKey(String channel, String parentId) => '$channel|$parentId';
+
+  ThreadData? threadOf(String channel, String parentId) => _threads[_threadKey(channel, parentId)];
+
+  Future<String?> loadThread(String channel, String parentId) => _try(() async {
+        _threads[_threadKey(channel, parentId)] = await api.thread(token, channel, parentId);
+        notifyListeners();
+      });
+
+  Future<String?> reply(Message parent, String text) {
+    final body = text.trim();
+    if (body.isEmpty) return Future.value(null);
+    return _try(() async {
+      final sent = await api.sendReply(token, me, parent.channel, parent.id, body);
+      _addReply(parent.channel, parent.id, sent);
+    });
+  }
+
+  Future<String?> deleteReply(Message reply) => _try(() async {
+        await api.deleteReply(token, reply.channel, reply.threadId, reply.id, me);
+        _dropReply(reply.channel, reply.threadId, reply.id);
+      });
+
+  void _addReply(String channel, String parentId, Message reply) {
+    final key = _threadKey(channel, parentId);
+    final t = _threads[key];
+    if (t == null || t.replies.any((r) => r.id == reply.id)) return;
+    _threads[key] = ThreadData(parent: t.parent, replies: [...t.replies, reply]);
+    notifyListeners();
+  }
+
+  void _dropReply(String channel, String parentId, String id) {
+    final key = _threadKey(channel, parentId);
+    final t = _threads[key];
+    if (t == null) return;
+    _threads[key] = ThreadData(parent: t.parent, replies: t.replies.where((r) => r.id != id).toList());
+    notifyListeners();
+  }
+
+  final Map<String, List<Decision>> _decisions = {};
+
+  List<Decision> decisionsOf(String channel) => List.unmodifiable(_decisions[channel] ?? const <Decision>[]);
+
+  Decision? decisionFor(String channel, String messageId) {
+    for (final d in _decisions[channel] ?? const <Decision>[]) {
+      if (d.messageId == messageId) return d;
+    }
+    return null;
+  }
+
+  Future<String?> loadDecisions(String channel) => _try(() async {
+        _decisions[channel] = await api.decisions(token, channel);
+        notifyListeners();
+      });
+
+  /// [kind] is `decision` or `task`.
+  Future<String?> markDecision(Message m, String kind) => _try(() async {
+        await api.markDecision(token, me, m.channel, m.id, kind);
+        await loadDecisions(m.channel);
+      });
+
+  Future<String?> setDecisionDone(Decision d, bool done) async {
+    final list = _decisions[d.channel];
+    final before = list;
+    if (list != null) {
+      _decisions[d.channel] = [for (final x in list) x.messageId == d.messageId ? x.copyWith(done: done, doneBy: done ? me : '') : x];
+      notifyListeners();
+    }
+    final err = await _try(() => api.setDecisionDone(token, me, d.channel, d.messageId, done));
+    if (err != null && before != null) {
+      _decisions[d.channel] = before;
+      notifyListeners();
+    }
+    return err;
+  }
+
+  Future<String?> removeDecision(Decision d) => _try(() async {
+        await api.removeDecision(token, me, d.channel, d.messageId);
+        _decisions[d.channel] = (_decisions[d.channel] ?? const <Decision>[]).where((x) => x.messageId != d.messageId).toList();
+        notifyListeners();
+      });
+
   // ---- the offline copy ------------------------------------------------------------
 
   Future<void> _prepareCache() => _cacheReady ??= () async {
@@ -367,6 +493,7 @@ class ChatController extends ChangeNotifier {
           if (last.isNotEmpty) _rememberLast(c.name, Message.fromJson(last.first));
         }(),
     ]);
+    await _restoreOutbox();
     started = true;
     notifyListeners();
   }
@@ -375,9 +502,10 @@ class ChatController extends ChangeNotifier {
   Future<void> _restoreFeed(String channel) async {
     final cache = _cache;
     final f = feed(channel);
-    if (cache == null || f.loaded || f.messages.isNotEmpty) return;
+    if (cache == null || f.loaded || f.restored) return;
+    f.restored = true;
     final saved = _maps(await cache.readMessages(channel));
-    if (saved.isEmpty || f.messages.isNotEmpty) return;
+    if (saved.isEmpty) return;
     for (final j in saved) {
       _put(f, Message.fromJson(j));
     }
@@ -492,7 +620,7 @@ class ChatController extends ChangeNotifier {
   Future<void> send(String channel, String text) async {
     final body = text.trim();
     if (body.isEmpty) return;
-    final localId = 'local-${_localSeq++}';
+    final localId = 'local-${_now().microsecondsSinceEpoch}-${_localSeq++}';
     final pending = Message(
       id: localId,
       clientId: localId,
@@ -507,10 +635,73 @@ class ChatController extends ChangeNotifier {
     _sort(f);
     _rememberLast(channel, pending);
     notifyListeners();
+    _saveOutbox();
     await _deliver(pending);
   }
 
-  Future<void> _deliver(Message pending) async {
+  // Messages written with no connection wait here and go out, in order,
+  // as soon as the server is reachable again.
+  final Set<String> _inFlight = {};
+  bool _flushing = false;
+
+  Iterable<Message> get _waiting => [
+        for (final f in _feeds.values)
+          for (final m in f.messages)
+            if (m.sendState == SendState.sending && m.id.startsWith('local-')) m,
+      ];
+
+  /// How many messages are waiting for a connection.
+  int get waitingCount => _waiting.where((m) => !_inFlight.contains(m.id)).length;
+
+  void _saveOutbox() => _save('outbox', [
+        for (final m in _waiting) {'id': m.id, 'channel': m.channel, 'text': m.text, 'at': m.timestamp.millisecondsSinceEpoch},
+      ]);
+
+  Future<void> _restoreOutbox() async {
+    final saved = await _cache?.readValue('outbox');
+    if (saved is! List) return;
+    for (final j in saved.whereType<Map<String, dynamic>>()) {
+      final id = j['id'];
+      final channel = j['channel'];
+      final text = j['text'];
+      final at = j['at'];
+      if (id is! String || channel is! String || text is! String || at is! num) continue;
+      final f = feed(channel);
+      if (f.messages.any((m) => m.id == id)) continue;
+      final m = Message(
+        id: id,
+        clientId: id,
+        user: me,
+        text: text,
+        channel: channel,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(at.toInt()),
+        sendState: SendState.sending,
+      );
+      f.messages.add(m);
+      _sort(f);
+      _rememberLast(channel, m);
+    }
+  }
+
+  /// Sends what is waiting, oldest first; stops at the first one that still
+  /// cannot get through.
+  Future<void> flushOutbox() async {
+    if (_flushing || _disposed) return;
+    _flushing = true;
+    try {
+      final queued = _waiting.where((m) => !_inFlight.contains(m.id)).toList()
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      for (final m in queued) {
+        if (_disposed || !await _deliver(m)) break;
+      }
+    } finally {
+      _flushing = false;
+    }
+  }
+
+  /// False when the server could not be reached (the message keeps waiting).
+  Future<bool> _deliver(Message pending) async {
+    _inFlight.add(pending.id);
     try {
       final id = await api.sendMessage(token, me, pending.text, pending.channel);
       final f = feed(pending.channel);
@@ -521,11 +712,24 @@ class ChatController extends ChangeNotifier {
         _remember(pending.channel, [sent]);
       }
       _sort(f);
+      _inFlight.remove(pending.id);
+      _saveOutbox();
+      notifyListeners();
+      return true;
     } on RpcException catch (e) {
+      _inFlight.remove(pending.id);
+      if (e.unreachable) {
+        // No connection: keep it, it goes out when the server is back.
+        _saveOutbox();
+        notifyListeners();
+        return false;
+      }
       _setState(pending, SendState.failed);
       error = e.message;
+      _saveOutbox();
+      notifyListeners();
+      return true;
     }
-    notifyListeners();
   }
 
   void _setState(Message pending, SendState state) {
@@ -544,6 +748,7 @@ class ChatController extends ChangeNotifier {
   /// Drops a message that failed to send.
   void discard(Message failed) {
     feed(failed.channel).messages.removeWhere((m) => m.id == failed.id);
+    _saveOutbox();
     notifyListeners();
   }
 
@@ -724,6 +929,7 @@ class ChatController extends ChangeNotifier {
       notifyListeners();
       // Catch up on whatever happened while the connection was down.
       unawaited(refreshAll());
+      unawaited(flushOutbox());
     } on Object {
       _lost();
     } finally {
@@ -759,6 +965,7 @@ class ChatController extends ChangeNotifier {
       unawaited(_connect());
     }
     unawaited(refreshAll());
+    unawaited(flushOutbox());
   }
 
   Future<void> refreshAll() async {
@@ -778,6 +985,7 @@ class ChatController extends ChangeNotifier {
     final a = active;
     if (a != null) await loadNewest(a);
     notifyListeners();
+    unawaited(flushOutbox());
   }
 
   void _onFrame(String frame) {
@@ -810,6 +1018,26 @@ class ChatController extends ChangeNotifier {
         final channel = m?['channel'];
         final id = m?['messageId'];
         if (channel is String && id is String) _remove(channel, id);
+      case 'pins_changed':
+        final m = _asMap(p);
+        final channel = m?['channel'];
+        final list = m?['pins'];
+        if (channel is String) {
+          _pins[channel] = list is List ? list.whereType<Map<String, dynamic>>().map(Pin.fromJson).toList() : <Pin>[];
+          notifyListeners();
+        }
+      case 'thread_reply':
+        final m = _asMap(p);
+        final channel = m?['channel'];
+        final thread = m?['threadId'];
+        final raw = _asMap(m?['message']);
+        if (channel is String && thread is String && raw != null) _addReply(channel, thread, Message.fromJson(raw));
+      case 'thread_reply_deleted':
+        final m = _asMap(p);
+        final channel = m?['channel'];
+        final thread = m?['threadId'];
+        final id = m?['messageId'];
+        if (channel is String && thread is String && id is String) _dropReply(channel, thread, id);
       case 'typing':
         final m = _asMap(p);
         final channel = m?['channel'];
@@ -902,8 +1130,10 @@ class ChatController extends ChangeNotifier {
     _rememberLast(channel, m);
     _remember(channel, [m]);
 
-    if (!existed && m.user != me) {
-      if (channel == active) {
+    // A parent that gained a reply arrives again; that is an update, not news.
+    final update = m.replyCount > 0 || m.threadId.isNotEmpty;
+    if (!existed && !update && m.user != me) {
+      if (channel == active && foreground) {
         _markRead(channel);
       } else {
         unread[channel] = (unread[channel] ?? 0) + 1;

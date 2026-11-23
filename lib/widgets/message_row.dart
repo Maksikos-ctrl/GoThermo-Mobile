@@ -20,12 +20,20 @@ class MessageRow extends StatelessWidget {
     required this.chat,
     required this.showHeader,
     this.onLongPress,
+    this.onOpenThread,
+    this.showThread = true,
   });
 
   final Message message;
   final ChatController chat;
   final bool showHeader;
   final VoidCallback? onLongPress;
+
+  /// Opens the replies under this message.
+  final VoidCallback? onOpenThread;
+
+  /// False inside the thread screen, where the replies are right below.
+  final bool showThread;
 
   bool get _mentionsMe =>
       message.user != chat.me && message.text.toLowerCase().contains('@${chat.me.toLowerCase()}');
@@ -64,8 +72,10 @@ class MessageRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (showHeader) _header(),
+                      if (chat.isPinned(message.channel, message.id)) _pinnedTag(),
                       _content(context),
                       if (message.reactions.isNotEmpty) _reactions(context),
+                      if (showThread && message.replyCount > 0 && onOpenThread != null) _threadLink(),
                       if (failed) _failed(),
                     ],
                   ),
@@ -163,6 +173,44 @@ class MessageRow extends StatelessWidget {
               onLongPress: () => showToast(context, '${entry.value.join(', ')} reacted with ${entry.key}'),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _pinnedTag() => Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.push_pin, size: 12, color: Palette.textMuted),
+            const SizedBox(width: 4),
+            Text('Pinned', style: TextStyle(color: Palette.textMuted, fontSize: 11.5)),
+          ],
+        ),
+      );
+
+  Widget _threadLink() {
+    final n = message.replyCount;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        key: Key('open-thread-${message.id}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: onOpenThread,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.forum_outlined, size: 15, color: Palette.accent),
+              const SizedBox(width: 6),
+              Text(
+                '$n ${n == 1 ? 'reply' : 'replies'}',
+                style: TextStyle(color: Palette.accent, fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

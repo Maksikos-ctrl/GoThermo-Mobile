@@ -8,6 +8,8 @@ import '../api/rpc_client.dart';
 import '../api/socket.dart';
 import '../cache/local_cache.dart';
 import '../models/user.dart';
+import '../notifications/notification_center.dart';
+import '../notifications/notifier.dart';
 import '../calls/call_types.dart';
 import '../calls/call_tones.dart';
 import '../calls/webrtc_engine.dart';
@@ -30,7 +32,9 @@ class AppController extends ChangeNotifier {
     CallEngine? callEngine,
     CallTones? callTones,
     Future<LocalCache> Function(String owner)? cacheOpener,
-  })  : _http = httpClient,
+    Notifier? notifier,
+  })  : notifications = NotificationCenter(notifier ?? SilentNotifier()),
+        _http = httpClient,
         _connector = connector,
         _google = google,
         _callEngine = callEngine,
@@ -38,6 +42,12 @@ class AppController extends ChangeNotifier {
         _cacheOpener = cacheOpener;
 
   final SessionStore store;
+
+  /// Phone notifications (messages and calls while the app is in the background).
+  final NotificationCenter notifications;
+
+  /// Channels the person asked to open by tapping a notification.
+  Stream<String> get opens => notifications.opens;
   late final ThemeSettings theme = ThemeSettings(store);
   final http.Client? _http;
   final SocketConnector? _connector;
@@ -115,6 +125,7 @@ class AppController extends ChangeNotifier {
   void _endChat() {
     _signalSub?.cancel();
     _signalSub = null;
+    notifications.detach();
     call?.dispose();
     call = null;
     chat?.dispose();
@@ -151,12 +162,24 @@ class AppController extends ChangeNotifier {
       call = k;
       c.calls = k;
       _signalSub = c.signals.listen((e) => k.handleSignal(e.type, e.payload));
+      notifications.attach(c, k);
       c.start();
     }
   }
 
+
   /// The app came back to the front.
-  void resumed() => chat?.resumed();
+  void resumed() {
+    notifications.setBackground(false, chat);
+    chat?.resumed();
+  }
+
+  /// The app went to the background.
+  void paused() {
+    notifications.setBackground(true, chat);
+  }
+
+  Future<void> setUpNotifications() => notifications.setUp();
 
   Future<void> signOut() async {
     final s = session;
@@ -189,6 +212,7 @@ class AppController extends ChangeNotifier {
   void dispose() {
     theme.dispose();
     _endChat();
+    notifications.dispose();
     super.dispose();
   }
 }

@@ -48,6 +48,9 @@ class FakeServer {
     {'username': 'cy', 'status': 'offline'},
   ];
   Map<String, int> unread = {};
+  final Set<String> pinned = {};
+  final Map<String, List<Map<String, dynamic>>> replies = {};
+  final List<Map<String, dynamic>> decisions = [];
   Map<String, List<Map<String, dynamic>>> messages = {};
   String? sendError;
 
@@ -61,11 +64,11 @@ class FakeServer {
   String? lastSentText;
 
   late final MockClient client = MockClient((req) async {
-    if (down) throw Exception('offline');
     final method = req.url.pathSegments.last;
     final args = jsonDecode(req.body) as List<dynamic>;
     calls.add(method);
     argsLog.add(args);
+    if (down) throw Exception('offline');
     switch (method) {
       case 'LoginWithGoogleToken':
         if (loginError != null) return failure(loginError!);
@@ -127,6 +130,57 @@ class FakeServer {
         });
       case 'Logout':
         return reply(true);
+      case 'PinMessage':
+        pinned.add(args[2] as String);
+        return reply(null);
+      case 'UnpinMessage':
+        pinned.remove(args[2] as String);
+        return reply(null);
+      case 'GetPinnedMessages':
+        final ch = args[1] as String;
+        return reply([
+          for (final id in pinned)
+            for (final m in messages[ch] ?? const <Map<String, dynamic>>[])
+              if (m['id'] == id) {'message': m, 'pinnedBy': 'bob', 'pinnedAt': '2026-11-12T10:30:00Z'},
+        ]);
+      case 'GetThread':
+        final ch = args[1] as String;
+        final parent = (messages[ch] ?? const <Map<String, dynamic>>[]).firstWhere((m) => m['id'] == args[2]);
+        return reply({'parent': parent, 'replies': replies[args[2]] ?? const []});
+      case 'SendReply':
+        if (sendError != null) return failure(sendError!);
+        final r = {
+          ...msgJson('r${_id++}', args[1] as String, args[4] as String, channel: args[2] as String, minute: 30),
+          'threadId': args[3],
+        };
+        (replies[args[3] as String] ??= []).add(r);
+        return reply(r);
+      case 'DeleteReply':
+        replies[args[2] as String]?.removeWhere((r) => r['id'] == args[3]);
+        return reply(null);
+      case 'GetDecisions':
+        return reply(decisions);
+      case 'MarkDecision':
+        decisions.add({
+          'messageId': args[3],
+          'channel': args[2],
+          'kind': args[4],
+          'text': 'marked',
+          'author': 'bob',
+          'markedBy': args[1],
+          'done': false,
+          'at': '2026-11-12T11:00:00Z',
+        });
+        return reply(null);
+      case 'SetDecisionDone':
+        if (sendError != null) return failure(sendError!);
+        for (final d in decisions) {
+          if (d['messageId'] == args[3]) d['done'] = args[4];
+        }
+        return reply(null);
+      case 'RemoveDecision':
+        decisions.removeWhere((d) => d['messageId'] == args[3]);
+        return reply(null);
     }
     return http.Response(jsonEncode({'error': 'unknown method $method'}), 404);
   });
