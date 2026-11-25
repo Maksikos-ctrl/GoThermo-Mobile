@@ -8,12 +8,16 @@ import '../util/markdown.dart';
 /// Message text with the simple markup the web app supports: **bold**,
 /// *italic*, ~~strike~~, `code`, code blocks, links and @mentions.
 class MarkdownText extends StatefulWidget {
-  const MarkdownText({super.key, required this.text, required this.me, this.style});
+  const MarkdownText({super.key, required this.text, required this.me, this.known, this.style});
 
   final String text;
 
   /// The signed-in person: a mention of them is highlighted.
   final String me;
+
+  /// Lower-case names of real people; only those are highlighted. Null
+  /// highlights every "@word".
+  final Set<String>? known;
   final TextStyle? style;
 
   @override
@@ -58,7 +62,7 @@ class _MarkdownTextState extends State<MarkdownText> {
       inline = <InlineSpan>[];
     }
 
-    for (final s in parseMarkdown(widget.text)) {
+    for (final s in parseMarkdown(widget.text, known: widget.known)) {
       switch (s.kind) {
         case SpanKind.text:
           inline.add(TextSpan(text: s.text));

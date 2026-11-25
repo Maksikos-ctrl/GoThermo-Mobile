@@ -4,6 +4,7 @@ import '../models/message.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
 import '../util/gif_url.dart';
+import '../util/mentions.dart';
 import '../util/time_format.dart';
 import 'avatar.dart';
 import 'avatar_color.dart';
@@ -35,8 +36,7 @@ class MessageRow extends StatelessWidget {
   /// False inside the thread screen, where the replies are right below.
   final bool showThread;
 
-  bool get _mentionsMe =>
-      message.user != chat.me && message.text.toLowerCase().contains('@${chat.me.toLowerCase()}');
+  bool get _mentionsMe => message.user != chat.me && mentionsUser(message.text, chat.me);
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +128,7 @@ class MessageRow extends StatelessWidget {
         child: GifView(url: gif, heroTag: 'gif-${message.stableKey}'),
       );
     }
-    final body = MarkdownText(text: message.text, me: chat.me);
+    final body = MarkdownText(text: message.text, me: chat.me, known: chat.knownNames);
     if (message.isPost) {
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 3),

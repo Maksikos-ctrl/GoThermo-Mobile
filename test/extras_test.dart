@@ -88,6 +88,61 @@ void main() {
       c.dispose();
     });
 
+    test('editing and reacting to a reply, here and live', () async {
+      final (c, server, conn) = await started(prepare: (s) => s.messages['general'] = [msgJson('m1', 'bob', 'one', minute: 1)]);
+      await c.open('general');
+      await settle();
+      final parent = c.messagesOf('general').single;
+      await c.loadThread('general', 'm1');
+      await c.reply(parent, 'first draft');
+      var mine = c.threadOf('general', 'm1')!.replies.single;
+
+      expect(await c.editReply(mine, '  second draft '), isNull);
+      mine = c.threadOf('general', 'm1')!.replies.single;
+      expect(mine.text, 'second draft');
+      expect(mine.isEdited, isTrue);
+      expect(await c.editReply(mine, 'second draft'), isNull); // no change, no call
+      expect(await c.editReply(mine, '   '), isNull);
+      expect(server.calls.where((x) => x == 'EditReply').length, 1);
+
+      expect(await c.reactToReply(mine, '👍'), isNull);
+      mine = c.threadOf('general', 'm1')!.replies.single;
+      expect(mine.reactions['👍'], ['ann']);
+      expect(server.reactedReplies, ['${mine.id}:👍']);
+      expect(await c.reactToReply(mine, '👍'), isNull); // toggles back
+      expect(c.threadOf('general', 'm1')!.replies.single.reactions['👍'], isNull);
+
+      // Somebody else edits their reply: the live copy replaces ours in place.
+      conn.current.push('thread_reply', {
+        'channel': 'general',
+        'threadId': 'm1',
+        'message': {...msgJson('rx', 'bob', 'hi', minute: 31), 'threadId': 'm1'},
+      });
+      await settle();
+      conn.current.push('thread_reply', {
+        'channel': 'general',
+        'threadId': 'm1',
+        'message': {...msgJson('rx', 'bob', 'hi (edited)', minute: 31), 'threadId': 'm1', 'isEdited': true},
+      });
+      await settle();
+      final texts = c.threadOf('general', 'm1')!.replies.map((r) => r.text).toList();
+      expect(texts, ['second draft', 'hi (edited)']);
+      c.dispose();
+    });
+
+    test('a refused reaction on a reply is put back', () async {
+      final (c, server, _) = await started(prepare: (s) => s.messages['general'] = [msgJson('m1', 'bob', 'one', minute: 1)]);
+      await c.open('general');
+      await settle();
+      await c.loadThread('general', 'm1');
+      await c.reply(c.messagesOf('general').single, 'mine');
+      final mine = c.threadOf('general', 'm1')!.replies.single;
+      server.down = true;
+      expect(await c.reactToReply(mine, '🎉'), isNotNull);
+      expect(c.threadOf('general', 'm1')!.replies.single.reactions['🎉'], isNull);
+      c.dispose();
+    });
+
     test('a parent that gained a reply is an update, not an unread message', () async {
       final (c, _, conn) = await started();
       conn.current.push('channel_message', {
@@ -124,6 +179,20 @@ void main() {
 
       expect(await c.removeDecision(c.decisionFor('general', 'm1')!), isNull);
       expect(c.decisionsOf('general'), isEmpty);
+      c.dispose();
+    });
+  });
+
+  group('reports', () {
+    test('a report goes to the server with its reason', () async {
+      final (c, server, _) = await started(prepare: (s) => s.messages['general'] = [msgJson('m1', 'bob', 'buy now', minute: 1)]);
+      await c.open('general');
+      await settle();
+      final m = c.messagesOf('general').single;
+      expect(await c.report(m, 'spam'), isNull);
+      expect(server.reports, ['m1:spam']);
+      server.reportError = 'too many reports, try again later';
+      expect(await c.report(m, 'other'), 'too many reports, try again later');
       c.dispose();
     });
   });

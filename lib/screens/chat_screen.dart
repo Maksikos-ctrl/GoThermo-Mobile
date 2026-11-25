@@ -164,6 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
               TypingIndicator(names: chat.typingIn(channel)),
               Composer(
                 onTyping: () => chat.announceTyping(channel),
+                mentionable: chat.mentionable,
                 hint: 'Message ${chat.titleOf(channel)}',
                 onSend: _send,
                 onAttach: _attach,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/message.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
+import '../widgets/message_actions.dart';
 import '../widgets/message_row.dart';
 import '../widgets/toast.dart';
 
@@ -62,25 +63,6 @@ class _ThreadScreenState extends State<ThreadScreen> {
     }
   }
 
-  Future<void> _askDelete(Message reply) async {
-    final sure = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete this reply?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text('Delete', style: TextStyle(color: Palette.danger)),
-          ),
-        ],
-      ),
-    );
-    if (sure != true) return;
-    final error = await chat.deleteReply(reply);
-    if (mounted) toastIfError(context, error);
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -128,7 +110,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
                         chat: chat,
                         showHeader: true,
                         showThread: false,
-                        onLongPress: r.user == chat.me ? () => _askDelete(r) : null,
+                        onLongPress: () => showReplyActions(context, chat, r),
                       ),
                   ],
                 ),

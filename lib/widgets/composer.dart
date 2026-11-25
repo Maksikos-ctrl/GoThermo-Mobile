@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 import '../util/emoji_data.dart';
+import '../util/mentions.dart';
 import 'emoji_panel.dart';
 
 /// What the "+" menu offers.
@@ -16,6 +17,7 @@ class Composer extends StatefulWidget {
     required this.onAttach,
     this.onGif,
     this.onTyping,
+    this.mentionable = const [],
   });
 
   final String hint;
@@ -28,6 +30,9 @@ class Composer extends StatefulWidget {
   /// Called while the person types.
   final VoidCallback? onTyping;
 
+  /// Names offered when the person types "@".
+  final List<String> mentionable;
+
   @override
   State<Composer> createState() => _ComposerState();
 }
@@ -37,6 +42,8 @@ class _ComposerState extends State<Composer> {
   final _focus = FocusNode();
   bool _emoji = false;
   bool _hasText = false;
+  MentionQuery? _mention;
+  List<String> _suggestions = const [];
 
   @override
   void initState() {
@@ -45,6 +52,7 @@ class _ComposerState extends State<Composer> {
       final has = _text.text.trim().isNotEmpty;
       if (has) widget.onTyping?.call();
       if (has != _hasText) setState(() => _hasText = has);
+      _updateMention();
     });
     _focus.addListener(() {
       if (_focus.hasFocus && _emoji) setState(() => _emoji = false);
@@ -56,6 +64,27 @@ class _ComposerState extends State<Composer> {
     _text.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  void _updateMention() {
+    final sel = _text.selection;
+    final q = sel.isValid && sel.isCollapsed ? mentionAt(_text.text, sel.baseOffset) : null;
+    final list = q == null ? const <String>[] : mentionSuggestions(widget.mentionable, q.query);
+    final same = q == _mention && list.length == _suggestions.length;
+    if (same) return;
+    setState(() {
+      _mention = q;
+      _suggestions = list;
+    });
+  }
+
+  void _pickMention(String name) {
+    final q = _mention;
+    if (q == null) return;
+    final cursor = _text.selection.baseOffset;
+    final r = applyMention(_text.text, cursor, q, name);
+    _text.value = TextEditingValue(text: r.text, selection: TextSelection.collapsed(offset: r.cursor));
+    _focus.requestFocus();
   }
 
   void _send() {
@@ -140,6 +169,27 @@ class _ComposerState extends State<Composer> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_suggestions.isNotEmpty)
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  key: const Key('mention-list'),
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  children: [
+                    for (final name in _suggestions)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          key: Key('mention-$name'),
+                          label: Text('@$name'),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _pickMention(name),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
               child: Row(

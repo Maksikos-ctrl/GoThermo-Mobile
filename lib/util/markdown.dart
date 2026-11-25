@@ -27,12 +27,29 @@ final _rules = <(SpanKind, RegExp)>[
   (SpanKind.italic, RegExp(r'(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])')),
   (SpanKind.italic, RegExp(r'(?<![\w_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w_])')),
   (SpanKind.link, RegExp(r'https?://[^\s<>()]+[^\s<>().,;:!?]')),
-  (SpanKind.mention, RegExp(r'(?<![\w@])@[A-Za-z0-9.\-]+')),
+  (SpanKind.mention, RegExp(r'(?<![\w@])@[A-Za-z0-9_]+')),
 ];
 
 /// Splits [input] into styled spans. Never throws; text with no markup comes
-/// back as one plain span.
-List<MdSpan> parseMarkdown(String input) {
+/// back as one plain span. With [known] (lower-case user names), an "@word"
+/// that is nobody stays plain text, like on the web.
+List<MdSpan> parseMarkdown(String input, {Set<String>? known}) {
+  final spans = _parse(input);
+  if (known == null) return spans;
+  final out = <MdSpan>[];
+  for (final s in spans) {
+    final plain = s.kind == SpanKind.mention && !known.contains(s.text.substring(1).toLowerCase());
+    final next = plain ? MdSpan(SpanKind.text, s.text) : s;
+    if (next.kind == SpanKind.text && out.isNotEmpty && out.last.kind == SpanKind.text) {
+      out[out.length - 1] = MdSpan(SpanKind.text, out.last.text + next.text);
+    } else {
+      out.add(next);
+    }
+  }
+  return out;
+}
+
+List<MdSpan> _parse(String input) {
   final out = <MdSpan>[];
   var rest = input;
   while (rest.isNotEmpty) {

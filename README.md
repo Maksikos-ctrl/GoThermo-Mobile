@@ -14,9 +14,11 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - Search across channels, profile picture and status
 
 **Team tools (same as the web app)**
-- **Threads**: reply to any message; the parent shows the reply count, replies arrive live
+- **Threads**: reply to any message; the parent shows the reply count, replies arrive live; long-press a reply to react, copy, edit or delete it
 - **Pins**: pin a message to a channel, see all pins from the channel menu
 - **Decisions**: mark a message as a decision or a task, tick tasks off, remove them
+- **@mentions**: type `@` and pick a name; real people are highlighted in messages, and messages that mention you stand out
+- **Report**: long-press someone else's message → Report message, pick a reason; the admins see it in the admin panel
 
 **Calls**
 - 1:1 voice and video (WebRTC), works with the web and desktop apps
@@ -32,7 +34,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 **Look**
 - Themes: Midnight, Graphite, AMOLED, Light, System; 6 accent colours; text size (Profile → Appearance)
 
-Not included yet: push on iOS (needs an Apple developer account and an APNs key in Firebase), group calls, screen share, creating channels, reporting messages.
+Not included yet: push on iOS (needs an Apple developer account and an APNs key in Firebase), group calls, screen share, creating channels.
 
 ## Run it
 

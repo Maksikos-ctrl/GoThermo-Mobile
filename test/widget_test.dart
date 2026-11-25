@@ -264,4 +264,36 @@ void main() {
     expect(find.text('Pinned by bob'), findsOneWidget);
     await close(tester);
   });
+
+  testWidgets('a message from somebody else can be reported', (tester) async {
+    final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'buy my stuff')];
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('buy my stuff'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('action-report')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('reason-spam')));
+    await tester.pumpAndSettle();
+    expect(server.reports, ['1:spam']);
+    expect(find.text('Report sent. Thank you'), findsOneWidget);
+    await close(tester);
+  });
+
+  testWidgets('typing @ offers names, and tapping one fills it in', (tester) async {
+    final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'hello')];
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('message-field')), 'hi @bo');
+    await tester.pump();
+    expect(find.byKey(const Key('mention-bob')), findsOneWidget);
+    expect(find.byKey(const Key('mention-cy')), findsNothing);
+    await tester.tap(find.byKey(const Key('mention-bob')));
+    await tester.pump();
+    expect(find.text('hi @bob '), findsOneWidget);
+    expect(find.byKey(const Key('mention-list')), findsNothing);
+    await close(tester);
+  });
 }

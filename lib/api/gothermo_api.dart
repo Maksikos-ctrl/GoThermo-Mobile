@@ -127,6 +127,21 @@ class GoThermoApi {
     return Message.fromJson(_map(raw));
   }
 
+  Future<Message> editReply(String token, String channel, String parentId, String replyId, String me, String text) async {
+    final raw = await _rpc.call('EditReply', [token, channel, parentId, replyId, me, text]);
+    return Message.fromJson(_map(raw));
+  }
+
+  /// Adds the reaction, or takes it back when it is already there.
+  Future<void> reactToReply(String token, String channel, String parentId, String replyId, String emoji, String me) async {
+    await _rpc.call('AddReplyReaction', [token, channel, parentId, replyId, emoji, me]);
+  }
+
+  /// Tells the admins about a message. [reason] is `spam`, `nsfw`, `harassment`, `malicious` or `other`.
+  Future<void> reportMessage(String token, String user, String channel, String messageId, String reason) async {
+    await _rpc.call('ReportMessage', [token, user, channel, messageId, reason]);
+  }
+
   Future<void> deleteReply(String token, String channel, String parentId, String replyId, String me) async {
     await _rpc.call('DeleteReply', [token, channel, parentId, replyId, me]);
   }

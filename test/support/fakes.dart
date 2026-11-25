@@ -60,6 +60,11 @@ class FakeServer {
   Future<void> Function()? beforeSendReply;
   int _id = 100;
 
+  /// Replies reacted to (`replyId:emoji`), reports received (`messageId:reason`).
+  final List<String> reactedReplies = [];
+  final List<String> reports = [];
+  String? reportError;
+
   /// Push addresses the server was given, and whether it refuses them.
   final List<String> devices = [];
   bool deviceError = false;
@@ -166,6 +171,19 @@ class FakeServer {
         };
         (replies[args[3] as String] ??= []).add(r);
         return reply(r);
+      case 'EditReply':
+        final list = replies[args[2] as String] ?? [];
+        final i = list.indexWhere((r) => r['id'] == args[3]);
+        if (i < 0) return failure('message not found');
+        list[i] = {...list[i], 'text': args[5], 'isEdited': true};
+        return reply(list[i]);
+      case 'AddReplyReaction':
+        reactedReplies.add('${args[3]}:${args[4]}');
+        return reply(null);
+      case 'ReportMessage':
+        if (reportError != null) return failure(reportError!);
+        reports.add('${args[3]}:${args[4]}');
+        return reply(null);
       case 'DeleteReply':
         replies[args[2] as String]?.removeWhere((r) => r['id'] == args[3]);
         return reply(null);

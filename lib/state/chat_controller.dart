@@ -129,6 +129,13 @@ class ChatController extends ChangeNotifier {
   User? userOf(String name) => users[name];
   String? avatarOf(String name) => users[name]?.avatar;
   String statusOf(String name) => users[name]?.status ?? 'offline';
+
+  /// Lower-case names of everybody, for highlighting @mentions.
+  Set<String> get knownNames => {for (final u in users.values) u.username.toLowerCase(), me.toLowerCase()};
+
+  /// Names offered when someone types "@".
+  List<String> get mentionable => [for (final u in people) u.username];
+
   List<User> get people => (users.values.where((u) => u.username != me).toList()
     ..sort((a, b) => a.username.toLowerCase().compareTo(b.username.toLowerCase())));
 
@@ -390,13 +397,46 @@ class ChatController extends ChangeNotifier {
         _dropReply(reply.channel, reply.threadId, reply.id);
       });
 
+  /// A reply arrived (or changed: edited, reacted to). The same id replaces
+  /// the old copy in place, so our own reply never shows twice.
   void _addReply(String channel, String parentId, Message reply) {
     final key = _threadKey(channel, parentId);
     final t = _threads[key];
-    if (t == null || t.replies.any((r) => r.id == reply.id)) return;
-    _threads[key] = ThreadData(parent: t.parent, replies: [...t.replies, reply]);
+    if (t == null) return;
+    final i = t.replies.indexWhere((r) => r.id == reply.id);
+    final list = [...t.replies];
+    if (i < 0) {
+      list.add(reply);
+    } else {
+      list[i] = reply;
+    }
+    _threads[key] = ThreadData(parent: t.parent, replies: list);
     notifyListeners();
   }
+
+  Future<String?> editReply(Message reply, String newText) {
+    final text = newText.trim();
+    if (text.isEmpty || text == reply.text) return Future.value(null);
+    return _try(() async {
+      final updated = await api.editReply(token, reply.channel, reply.threadId, reply.id, me, text);
+      _addReply(reply.channel, reply.threadId, updated);
+    });
+  }
+
+  Future<String?> reactToReply(Message reply, String emoji) async {
+    final before = reply.reactions;
+    _addReply(reply.channel, reply.threadId, reply.copyWith(reactions: toggledReactions(before, emoji, me)));
+    try {
+      await api.reactToReply(token, reply.channel, reply.threadId, reply.id, emoji, me);
+      return null;
+    } on RpcException catch (e) {
+      _addReply(reply.channel, reply.threadId, reply.copyWith(reactions: before));
+      return e.message;
+    }
+  }
+
+  /// Tells the admins about a message (see [reportReasons]).
+  Future<String?> report(Message m, String reason) => _try(() => api.reportMessage(token, me, m.channel, m.id, reason));
 
   void _dropReply(String channel, String parentId, String id) {
     final key = _threadKey(channel, parentId);
