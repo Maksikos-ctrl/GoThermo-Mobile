@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/message.dart';
 import '../state/chat_controller.dart';
 import '../theme.dart';
+import '../widgets/mention_bar.dart';
 import '../widgets/message_actions.dart';
 import '../widgets/message_row.dart';
 import '../widgets/toast.dart';
@@ -117,7 +118,11 @@ class _ThreadScreenState extends State<ThreadScreen> {
               ),
               SafeArea(
                 top: false,
-                child: Container(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(color: Palette.bgSecondary, child: MentionBar(controller: _text, mentionable: chat.mentionable)),
+                    Container(
                   padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
                   decoration: BoxDecoration(color: Palette.bgSecondary, border: Border(top: BorderSide(color: Palette.border))),
                   child: Row(
@@ -141,6 +146,8 @@ class _ThreadScreenState extends State<ThreadScreen> {
                       ),
                     ],
                   ),
+                ),
+                  ],
                 ),
               ),
             ],

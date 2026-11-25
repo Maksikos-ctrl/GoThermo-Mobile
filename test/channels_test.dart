@@ -3,7 +3,6 @@ import 'package:gothermo_mobile/models/channel.dart';
 import 'package:gothermo_mobile/util/channel_name.dart';
 
 import 'chat_controller_test.dart' show started;
-import 'support/fakes.dart';
 
 void main() {
   group('channel names', () {

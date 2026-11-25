@@ -17,7 +17,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - **Threads**: reply to any message; the parent shows the reply count, replies arrive live; long-press a reply to react, copy, edit or delete it
 - **Pins**: pin a message to a channel, see all pins from the channel menu
 - **Decisions**: mark a message as a decision or a task, tick tasks off, remove them
-- **@mentions**: type `@` and pick a name; real people are highlighted in messages, and messages that mention you stand out
+- **@mentions**: type `@` and pick a name (in chats and in thread replies); real people are highlighted in messages, and messages that mention you stand out
 - **Channels**: make a public or private channel from the Channels tab (pick who to invite); leave a private channel, or delete one you made, from the ⋮ menu
 - **Report**: long-press someone else's message → Report message, pick a reason; the admins see it in the admin panel
 

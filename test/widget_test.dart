@@ -318,4 +318,23 @@ void main() {
     expect(find.byKey(const Key('mention-list')), findsNothing);
     await close(tester);
   });
+
+  testWidgets('names are offered in the thread reply box too', (tester) async {
+    final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'hello from bob')];
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('hello from bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('action-thread')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('thread-field')), 'thanks @cy');
+    await tester.pump();
+    expect(find.byKey(const Key('mention-cy')), findsOneWidget);
+    expect(find.byKey(const Key('mention-bob')), findsNothing);
+    await tester.tap(find.byKey(const Key('mention-cy')));
+    await tester.pump();
+    expect(find.text('thanks @cy '), findsOneWidget);
+    await close(tester);
+  });
 }
