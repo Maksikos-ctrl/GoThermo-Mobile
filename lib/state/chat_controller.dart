@@ -1089,14 +1089,7 @@ class ChatController extends ChangeNotifier {
       case 'channel_deleted':
         final m = _asMap(p);
         final name = m?['channel'];
-        if (name is String) {
-          channels = channels.where((c) => c.name != name).toList();
-          dms = dms.where((c) => c.name != name).toList();
-          _feeds.remove(name);
-          lastMessage.remove(name);
-          unread.remove(name);
-          notifyListeners();
-        }
+        if (name is String) _removeChannel(name);
       case 'status_update':
         final m = _asMap(p);
         final name = m?['username'];
@@ -1138,6 +1131,44 @@ class ChatController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  void _removeChannel(String name) {
+    channels = channels.where((c) => c.name != name).toList();
+    dms = dms.where((c) => c.name != name).toList();
+    _feeds.remove(name);
+    lastMessage.remove(name);
+    unread.remove(name);
+    notifyListeners();
+  }
+
+  /// Makes a channel. Returns it, or the reason it could not be made.
+  Future<({Channel? channel, String? error})> createChannel({
+    required String name,
+    String description = '',
+    bool isPrivate = false,
+    List<String> members = const [],
+  }) async {
+    try {
+      final c = await api.createChannel(token, name, description.trim(), me,
+          isPrivate: isPrivate, members: isPrivate ? members : const []);
+      _onChannelCreated(c);
+      return (channel: c, error: null);
+    } on RpcException catch (e) {
+      return (channel: null, error: e.message);
+    }
+  }
+
+  /// Leaves a private channel.
+  Future<String?> leaveChannel(String name) => _try(() async {
+        await api.leaveChannel(token, name, me);
+        _removeChannel(name);
+      });
+
+  /// Deletes a channel you made.
+  Future<String?> deleteChannel(String name) => _try(() async {
+        await api.deleteChannel(token, name, me);
+        _removeChannel(name);
+      });
 
   void _onChannelCreated(Channel c) {
     if (c.name.isEmpty) return;

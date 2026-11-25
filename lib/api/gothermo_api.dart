@@ -79,6 +79,26 @@ class GoThermoApi {
     return Channel.fromJson(_map(raw));
   }
 
+  Future<Channel> createChannel(
+    String token,
+    String name,
+    String description,
+    String me, {
+    required bool isPrivate,
+    List<String> members = const [],
+  }) async {
+    final raw = await _rpc.call('CreateChannel', [token, name, description, me, isPrivate, members]);
+    return Channel.fromJson(_map(raw));
+  }
+
+  Future<void> leaveChannel(String token, String channel, String username) async {
+    await _rpc.call('LeaveChannel', [token, channel, username]);
+  }
+
+  Future<void> deleteChannel(String token, String channel, String username) async {
+    await _rpc.call('DeleteChannel', [token, channel, username]);
+  }
+
   Future<void> joinChannel(String token, String channel, String username) async {
     await _rpc.call('JoinChannel', [token, channel, username]);
   }

@@ -281,6 +281,28 @@ void main() {
     await close(tester);
   });
 
+  testWidgets('a channel can be made from the phone and then deleted', (tester) async {
+    final server = FakeServer();
+    await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));
+    await tester.tap(find.byKey(const Key('new-channel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('channel-name')), 'My Plans');
+    await tester.tap(find.byKey(const Key('channel-create')));
+    await tester.pumpAndSettle();
+    expect(server.channelCalls, ['create:my-plans']);
+    expect(find.byKey(const Key('message-field')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('channel-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('menu-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-leave-delete')));
+    await tester.pumpAndSettle();
+    expect(server.channelCalls, ['create:my-plans', 'delete:my-plans']);
+    expect(find.text('my-plans'), findsNothing);
+    await close(tester);
+  });
+
   testWidgets('typing @ offers names, and tapping one fills it in', (tester) async {
     final server = FakeServer()..messages['general'] = [msgJson('1', 'bob', 'hello')];
     await launch(tester, server: server, store: MemorySessionStore(token: 'saved'));

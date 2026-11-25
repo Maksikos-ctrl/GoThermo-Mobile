@@ -19,8 +19,9 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
   final canEdit = mine && !m.isFile && !m.isCall && gifUrlOf(m.text) == null;
   final action = await showModalBottomSheet<_Action>(
     context: context,
+    isScrollControlled: true,
     builder: (sheetContext) => SafeArea(
-      child: Column(
+      child: SingleChildScrollView(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
@@ -90,7 +91,7 @@ Future<void> showMessageActions(BuildContext context, ChatController chat, Messa
               onTap: () => Navigator.pop(sheetContext, const _Action.delete()),
             ),
         ],
-      ),
+      )),
     ),
   );
   if (action == null || !context.mounted) return;
@@ -268,8 +269,9 @@ Future<void> showReplyActions(BuildContext context, ChatController chat, Message
   final canEdit = mine && !reply.isFile && gifUrlOf(reply.text) == null;
   final action = await showModalBottomSheet<_Action>(
     context: context,
+    isScrollControlled: true,
     builder: (sheetContext) => SafeArea(
-      child: Column(
+      child: SingleChildScrollView(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
@@ -313,7 +315,7 @@ Future<void> showReplyActions(BuildContext context, ChatController chat, Message
               onTap: () => Navigator.pop(sheetContext, const _Action.delete()),
             ),
         ],
-      ),
+      )),
     ),
   );
   if (action == null || !context.mounted) return;

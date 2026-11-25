@@ -65,6 +65,9 @@ class FakeServer {
   final List<String> reports = [];
   String? reportError;
 
+  /// Channel changes asked for: `create:name`, `leave:name`, `delete:name`.
+  final List<String> channelCalls = [];
+
   /// Push addresses the server was given, and whether it refuses them.
   final List<String> devices = [];
   bool deviceError = false;
@@ -179,6 +182,28 @@ class FakeServer {
         return reply(list[i]);
       case 'AddReplyReaction':
         reactedReplies.add('${args[3]}:${args[4]}');
+        return reply(null);
+      case 'CreateChannel':
+        final name = args[1] as String;
+        if (channels.any((c) => c['name'] == name)) return failure('channel already exists');
+        final c = {
+          'id': '${_id++}',
+          'name': name,
+          'description': args[2],
+          'createdBy': args[3],
+          'isPrivate': args[4],
+          if (args[4] == true) 'members': [args[3], ...(args[5] as List)],
+        };
+        channels.add(c);
+        channelCalls.add('create:$name');
+        return reply(c);
+      case 'LeaveChannel':
+        channelCalls.add('leave:${args[1]}');
+        channels.removeWhere((c) => c['name'] == args[1]);
+        return reply(null);
+      case 'DeleteChannel':
+        channelCalls.add('delete:${args[1]}');
+        channels.removeWhere((c) => c['name'] == args[1]);
         return reply(null);
       case 'ReportMessage':
         if (reportError != null) return failure(reportError!);

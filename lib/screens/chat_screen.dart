@@ -235,6 +235,10 @@ class _ChatScreenState extends State<ChatScreen> {
       key: const Key('channel-menu'),
       tooltip: 'More',
       onSelected: (v) {
+        if (v == 'leave' || v == 'delete') {
+          _confirmLeaveOrDelete(v == 'delete');
+          return;
+        }
         final page = v == 'pins'
             ? PinnedScreen(chat: chat, channel: channel)
             : DecisionsScreen(chat: chat, channel: channel);
@@ -251,8 +255,44 @@ class _ChatScreenState extends State<ChatScreen> {
           value: 'decisions',
           child: Text('Decisions & tasks'),
         ),
+        if (chat.channelNamed(channel)?.canLeave(chat.me) ?? false)
+          const PopupMenuItem<String>(key: Key('menu-leave'), value: 'leave', child: Text('Leave channel')),
+        if (chat.channelNamed(channel)?.canDelete(chat.me) ?? false)
+          PopupMenuItem<String>(
+            key: const Key('menu-delete'),
+            value: 'delete',
+            child: Text('Delete channel', style: TextStyle(color: Palette.danger)),
+          ),
       ],
     );
+  }
+
+  Future<void> _confirmLeaveOrDelete(bool delete) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(delete ? 'Delete #$channel?' : 'Leave #$channel?'),
+        content: Text(delete
+            ? 'The channel and all its messages will be gone for everyone.'
+            : 'You will lose access until someone adds you again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(
+            key: const Key('confirm-leave-delete'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(delete ? 'Delete' : 'Leave', style: TextStyle(color: Palette.danger)),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    final error = delete ? await chat.deleteChannel(channel) : await chat.leaveChannel(channel);
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.of(context).pop();
+    } else {
+      toastIfError(context, error);
+    }
   }
 
   List<Widget> _callButtons() {

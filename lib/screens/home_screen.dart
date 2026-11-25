@@ -11,6 +11,7 @@ import '../widgets/avatar.dart';
 import '../widgets/connection_banner.dart';
 import '../widgets/motion.dart';
 import 'chat_screen.dart';
+import 'new_channel_sheet.dart';
 import 'new_message_sheet.dart';
 import 'profile_sheet.dart';
 import 'search_screen.dart';
@@ -111,17 +112,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ],
           ),
-          floatingActionButton: AnimatedScale(
-            scale: _tabs.index == 1 ? 1 : 0,
+          floatingActionButton: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutBack,
-            child: FloatingActionButton.extended(
-              key: const Key('new-message'),
-              heroTag: 'new-message',
-              onPressed: _tabs.index == 1 ? () => showNewMessageSheet(context, chat) : null,
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('New message'),
-            ),
+            switchInCurve: Curves.easeOutBack,
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+            child: _tabs.index == 1
+                ? FloatingActionButton.extended(
+                    key: const Key('new-message'),
+                    heroTag: 'new-message',
+                    onPressed: () => showNewMessageSheet(context, chat),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('New message'),
+                  )
+                : FloatingActionButton.extended(
+                    key: const Key('new-channel'),
+                    heroTag: 'new-channel',
+                    onPressed: () => showNewChannelSheet(context, chat),
+                    icon: const Icon(Icons.add),
+                    label: const Text('New channel'),
+                  ),
           ),
         );
       },

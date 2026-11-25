@@ -18,6 +18,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 - **Pins**: pin a message to a channel, see all pins from the channel menu
 - **Decisions**: mark a message as a decision or a task, tick tasks off, remove them
 - **@mentions**: type `@` and pick a name; real people are highlighted in messages, and messages that mention you stand out
+- **Channels**: make a public or private channel from the Channels tab (pick who to invite); leave a private channel, or delete one you made, from the ⋮ menu
 - **Report**: long-press someone else's message → Report message, pick a reason; the admins see it in the admin panel
 
 **Calls**
@@ -34,7 +35,7 @@ It is one more client of the same GoThermo server the web and desktop apps use: 
 **Look**
 - Themes: Midnight, Graphite, AMOLED, Light, System; 6 accent colours; text size (Profile → Appearance)
 
-Not included yet: push on iOS (needs an Apple developer account and an APNs key in Firebase), group calls, screen share, creating channels.
+Not included yet: push on iOS (needs an Apple developer account and an APNs key in Firebase), group calls, screen share.
 
 ## Run it
 
